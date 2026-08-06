@@ -62,7 +62,8 @@ flowchart TD
         PRED --> SUMMARY[(data/outputs/model_comparison_results_corrected.csv)]
         SUMMARY --> DM[Diebold-Mariano HLN\nsrc/metrics.py]
         DM --> DM_CSV[(data/outputs/dm_test_results.csv)]
-        SUMMARY --> PI[Prediction Intervals\nARIMA/Prophet predict_interval]
+        SUMMARY --> PI[Prediction Intervals\nARIMA/Prophet predict_interval\nwarn_on_swallowed_fits per model]
+        PI --> PI_BALANCE[assert_balanced_test_sets on pi_details]
         PI --> PI_CSV[(data/outputs/pi_*_corrected.csv)]
         SUMMARY --> ORACLE[Oracle exogenous\noracle_fc]
         ORACLE --> ORACLE_CSV[(data/outputs/oracle_exogenous_results.csv)]
@@ -348,7 +349,7 @@ This is the **thesis engine**. It runs the entire comparison and self-verifies.
 | `ExpandingWindowCV` over origins 2000..2023, horizons 1..4 | Identical protocol for all 8 models (FR-4) | `src/cv.py:30` | Every run |
 | Per-origin model cache (fit once, predict 4 horizons) | Efficiency + reproducibility (same fit shared) | `cv.py:102` | Every run |
 | **Leakage guards** at each fold: `assert_training_precedes_origin`, `assert_horizon_consistent` | Structural leakage impossible by construction (NFR-1) | `src/guards.py:18,54` | Every fold |
-| **Swallowed-fold warning**: `warn_on_swallowed_fits` | Quantify silent `except:continue` (F-4/NFR-2) | `src/guards.py:148` | End of each model |
+| **Swallowed-fold warning**: `warn_on_swallowed_fits` (CV + PI loops) | Quantify silent `except:continue` (F-4/NFR-2) | `src/guards.py:205`; called `cv.py:172`, `05_Model.py:407,411` | End of each model + each PI batch |
 | `select_exog_pvalues` in ARIMAX stepwise | By-name p-values; eliminates positional-slice bug (NFR-9/F-1) | `src/guards.py:66`, `models.py:122` | Every ARIMAX fold |
 
 #### 5.6: Results Aggregation
@@ -379,7 +380,8 @@ This is the **thesis engine**. It runs the entire comparison and self-verifies.
 
 | **What** | **Why** | **Where** |
 |----------|---------|-----------|
-| `assert_balanced_test_sets(details)` — raises if any model has different test years per horizon | Protocol symmetry (F-4/NFR-2) | `src/guards.py:113`, `05_Model.py:656` |
+| `assert_balanced_test_sets(details)` — raises if any model has different test years per horizon | Protocol symmetry (F-4/NFR-2) | `src/guards.py:184`, `05_Model.py:665` |
+| `assert_balanced_test_sets(pi_details)` — same check on PI coverage table | PI protocol symmetry (F-4/NFR-2) | `src/guards.py:184`, `05_Model.py:501` |
 | `verify()` diffs every output CSV vs `data/expected/` under tolerance | Self-certification (FR-8) | `05_Model.py:621` |
 | Prints `ALL CHECKS PASSED` or `SOME CHECKS FAILED` | Loud failure | Stdout |
 
@@ -395,7 +397,7 @@ This is the **thesis engine**. It runs the entire comparison and self-verifies.
 
 | Module | Responsibility | Key Guards Used |
 |--------|----------------|-----------------|
-| `cv.py` | Expanding-window protocol, baselines, per-origin cache | `assert_training_precedes_origin`, `assert_horizon_consistent`, `warn_on_swallowed_fits` |
+| `cv.py` | Expanding-window protocol, baselines, per-origin cache | `assert_training_precedes_origin`, `assert_horizon_consistent`, `warn_on_swallowed_fits` (fold + PI loops) |
 | `models.py` | 8 model factories, `fit_best_arima`, `arimax_stepwise_selection`, `tune_rf/tune_xgb`, `predict_interval` | `select_exog_pvalues` |
 | `metrics.py` | RMSE, MAE, Diebold–Mariano (HLN) | — |
 | `weather.py` | `aggregate_seasonal` (single alignment truth) | — |

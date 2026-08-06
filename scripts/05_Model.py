@@ -58,7 +58,7 @@ import config
 from src import plotting  # noqa: F401  (inline in notebooks, Agg when headless)
 from src.cv import ExpandingWindowCV, evaluate_baseline
 from src.metrics import rmse, mae, diebold_mariano
-from src.guards import assert_balanced_test_sets
+from src.guards import assert_balanced_test_sets, warn_on_swallowed_fits
 from src.models import (
     persistence_factory,
     arima_factory,
@@ -400,6 +400,7 @@ plt.show()
 # %%
 def compute_arima_pi(data):
     rows = []
+    skipped = 0
     for train_end in range(config.INITIAL_TRAIN_END, int(data["year"].max())):
         train_df = data[data["year"] <= train_end]
         predictor = arima_factory(train_df, None)
@@ -410,6 +411,7 @@ def compute_arima_pi(data):
             try:
                 y_pred, lo, hi = predictor.predict_interval(h)
             except Exception:
+                skipped += 1
                 continue
             test_row = data[data["year"] == test_year]
             if len(test_row) == 0:
@@ -428,16 +430,14 @@ def compute_arima_pi(data):
                     "covered": bool(lo <= y_true <= hi),
                 }
             )
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows), skipped
 
 
 def compute_prophet_pi(data):
     rows = []
+    skipped = 0
     for train_end in range(config.INITIAL_TRAIN_END, int(data["year"].max())):
         train_df = data[data["year"] <= train_end]
-        # Prophet's interval sampling draws from the global RNG; seeding per
-        # origin keeps the coverage experiment reproducible (same as the
-        # corrected Colab pipeline).
         np.random.seed(config.SEED)
         predictor = prophet_factory(train_df, None)
         for h in config.HORIZONS:
@@ -447,6 +447,7 @@ def compute_prophet_pi(data):
             try:
                 y_pred, lo, hi = predictor.predict_interval(h)
             except Exception:
+                skipped += 1
                 continue
             test_row = data[data["year"] == test_year]
             if len(test_row) == 0:
@@ -465,15 +466,19 @@ def compute_prophet_pi(data):
                     "covered": bool(lo <= y_true <= hi),
                 }
             )
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows), skipped
 
 
 print("Computing ARIMA prediction intervals...")
-arima_pi = compute_arima_pi(data)
-print(f"  ARIMA rows: {len(arima_pi)}")
+arima_pi, arima_skipped = compute_arima_pi(data)
+pi_attempted = len(arima_pi) + arima_skipped
+warn_on_swallowed_fits(pi_attempted, len(arima_pi), "ARIMA-PI")
+print(f"  ARIMA rows: {len(arima_pi)}, skipped: {arima_skipped}")
 print("Computing Prophet prediction intervals...")
-prophet_pi = compute_prophet_pi(data)
-print(f"  Prophet rows: {len(prophet_pi)}")
+prophet_pi, prophet_skipped = compute_prophet_pi(data)
+pi_attempted = len(prophet_pi) + prophet_skipped
+warn_on_swallowed_fits(pi_attempted, len(prophet_pi), "Prophet-PI")
+print(f"  Prophet rows: {len(prophet_pi)}, skipped: {prophet_skipped}")
 
 # %%
 pi_details = pd.concat([arima_pi, prophet_pi], ignore_index=True)
@@ -492,6 +497,8 @@ for model in ["ARIMA", "Prophet"]:
             }
         )
 pi_summary_df = pd.DataFrame(pi_summary)
+assert_balanced_test_sets(pi_details)
+print("  PI test-year symmetry across models: OK")
 pi_details.to_csv(config.OUTPUT_FILES["pi_details"], index=False)
 pi_summary_df.to_csv(config.OUTPUT_FILES["pi_coverage"], index=False)
 print("\nCoverage + width summary:")
@@ -580,7 +587,10 @@ merged["improvement_pct"] = (
 ).round(1)
 merged = merged.rename(columns={"rmse": "standard_rmse"})
 
-for h in [2, 3, 4]:  # ARIMA needs no exog -> add context rows with zero improvement
+# ARIMA needs no exog → it gets no oracle run, so its oracle_rmse is NaN after
+# the merge. Add context rows with oracle_rmse = standard_rmse (zero improvement)
+# for every horizon so the oracle table is complete for all 8 models × 4 horizons.
+for h in [1, 2, 3, 4]:
     row = standard[(standard["model"] == "ARIMA") & (standard["horizon"] == h)]
     if len(row) > 0:
         r = row.iloc[0]

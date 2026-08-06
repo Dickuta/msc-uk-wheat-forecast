@@ -34,7 +34,7 @@ the entire contribution is *an honest, standardised evaluation framework*.
 | ID | Requirement | Enforcement | Status |
 |---|---|---|---|
 | NFR-1 | Leakage-safety: no test-period information in any shaping decision | Runtime guards `assert_training_precedes_origin`, `assert_horizon_consistent` (`src/guards.py:18-42`) at every CV fold; ML full-series tuning still disclosed | **enforced (structural + runtime)** |
-| NFR-2 | Protocol symmetry across model families | `warn_on_swallowed_fits` per-model (`cv.py:172`); `assert_balanced_test_sets` in verify (`05_Model.py:656`); ML tuning asymmetry still disclosed | **partial (runtime guards + disclosure)** |
+| NFR-2 | Protocol symmetry across model families | `warn_on_swallowed_fits` per-model (`cv.py:172`); per-origin in PI loops (`05_Model.py:407,411`); `assert_balanced_test_sets` on CV details (`05_Model.py:665`) **and** PI details (`05_Model.py:501`); ML tuning asymmetry still disclosed | **enforced** |
 | NFR-3 | Small-sample honesty in inference | HLN DM correction, HAC autocovariances, Student-t T−1 df | enforced |
 | NFR-4 | Bit-level reproducibility given fixed inputs + seed | single `config.SEED`, `random_state=42`, per-origin model cache | enforced |
 | NFR-5 | No execution-order dependence | stages read fresh CSVs; mild smell: `02_EDA.py:155` mutates a local `decade` column | partial |
@@ -73,7 +73,7 @@ the disclosed ML tuning asymmetry.
 | F-1 | Silent numerical misalignment (off-by-one, positional slices) | shared alignment fn; identity-keyed verify; `assert_alignment` spot-check in 01; `select_exog_pvalues` refuses positional slices | enforced |
 | F-2 | Silent leakage (tuning/selection/scaling touching the test period) | `assert_training_precedes_origin` + `assert_horizon_consistent` at every fold; `warn_on_swallowed_fits`; ML full-series tuning still disclosed | **enforced (structural)** + disclosed (ML tuning) |
 | F-3 | The verify harness's own blind spot (expected == reproduced-itself) | `data/expected/manifest.md` pins origin + hashes; original thesis numbers archived in `data/thesis_reference/` | enforced |
-| F-4 | Silent `except: continue` → unequal `n_test`, invisible apples-to-oranges | cv records `skipped_folds` + warns per horizon; `warn_on_swallowed_fits`; §5.10 `assert_balanced_test_sets` raises on asymmetry | enforced |
+| F-4 | Silent `except: continue` → unequal `n_test`, invisible apples-to-oranges | cv records `skipped_folds` + warns per horizon (`cv.py:144-154,172`); PI loops track `skipped` + emit `warn_on_swallowed_fits` per model (`05_Model.py:407,411`); §5.10 `assert_balanced_test_sets` raises on asymmetry — on CV `details` (`05_Model.py:665`) **and** on `pi_details` (`05_Model.py:501`) | enforced |
 | F-5 | Dependency drift moves numbers without a code edit | pinned deps + recorded env | enforced |
 | F-6 | Data-source drift (revised/rotten sources) | frozen raw + SHA-256 manifest | enforced |
 

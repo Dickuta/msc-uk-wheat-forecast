@@ -95,17 +95,12 @@ modelling = (
     .reset_index(drop=True)
 )
 
-modelling.to_csv(config.MODEL_TABLE_FILE, index=False)
-print(
-    f"Modelling table: {modelling.shape[0]} rows x {modelling.shape[1]} cols -> {config.MODEL_TABLE_FILE.name}"
-)
-modelling.head()
-
 # %% [markdown]
 # ## 3.4 Validation
 #
 # A good modelling table must be complete, correctly typed and temporally
-# contiguous. The checks below fail loudly if anything is off.
+# contiguous. The checks below fail loudly if anything is off — and a failing
+# table is never written to disk.
 
 # %%
 checks = {
@@ -121,6 +116,15 @@ checks = {
 }
 for name, ok in checks.items():
     print(f"  [{'OK' if ok else 'FAIL'}] {name}")
+
+# Fail early: a bad table must never reach downstream stages
+assert all(checks.values()), "modelling table failed validation — see checks above"
+
+# Only persist after validation passes
+modelling.to_csv(config.MODEL_TABLE_FILE, index=False)
+print(
+    f"Modelling table written: {modelling.shape[0]} rows x {modelling.shape[1]} cols -> {config.MODEL_TABLE_FILE.name}"
+)
 
 # %%
 print("Summary statistics of the modelling table:")

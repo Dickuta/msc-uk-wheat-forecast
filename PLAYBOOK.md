@@ -110,6 +110,21 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
       via `jupytext --update` (outputs preserved); `05_Model.ipynb` regenerated
       from the refactored script — re-run 05 to repopulate outputs
 - [x] `src/weather.py` now listed in README + `config.py` docstring layout
+- [x] `scripts/03_Modelling_Table.py`: §3.4 validation now **raises** on failure
+      (was print-only); `to_csv` deferred to after the `assert all(checks.values())`
+      so a broken table never reaches downstream stages
+- [x] `scripts/05_Model.py`: PI loops (`compute_arima_pi`, `compute_prophet_pi`)
+      now track `skipped` per model and emit `warn_on_swallowed_fits` (was silent
+      `except: continue`); return `(DataFrame, skipped_count)` so callers can report
+      the gap; `assert_balanced_test_sets` added on `pi_details` for PI protocol
+      symmetry (NFR-2 / F-4)
+- [x] `scripts/05_Model.py`: Oracle ARIMA loop horizon range fixed from `[2,3,4]`
+      to `[1,2,3,4]` — h=1 context rows were being dropped, making the oracle
+      comparison table incomplete for ARIMA across all 4 horizons
+- [x] `scripts/01_Data_Acquisition.py`: `payload` `UnboundLocalError` on fresh
+      downloads fixed (was only bound inside the retry loop; now initialised
+      before); winter seasonal alignment guard (`assert_alignment_spanning_year`)
+      added spot-check; duplicate seasonal spot-check print removed
 
 ## 5. Tests (DONE)
 
@@ -117,12 +132,10 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
       (incl. year-boundary windows), `features.forecast_exogenous` (short/constant series),
       `cv.expanding_windows`/`evaluate_baseline`/`ExpandingWindowCV`,
       `models.fit_best_arima`/`predict_interval`/oracle plumbing/stepwise behaviour
-- [x] `tests/test_guards.py` — 10 tests for the six invariant guards
-      (LeakageError, AlignmentError, select_exog_pvalues, assert_alignment,
-      assert_balanced_test_sets, warn_on_swallowed_fits)
+- [x] `tests/test_guards.py` — 19 tests for the six invariant guards (test count grew as edge
+      cases were added: boundary-span, missing-covariate, multi-model imbalance)
 - [x] `conftest.py` at root so `pytest` resolves `src` without installation
-- [x] `pytest` installed (9.1.1) + 34 tests passing from the pipeline root
-      (incl. `test_expanding_window_cv_records_skipped_folds`)
+- [x] `pytest` installed (9.1.1) + 43 tests passing from the pipeline root
 - [ ] Optional: add a GitHub Actions workflow to run `pytest` on push
 
 ## 6. Docs (DONE)
@@ -186,7 +199,7 @@ Dev-only (`requirements-dev.txt` / `[project.optional-dependencies] dev`):
 ## 9. Verification commands
 
 ```bash
-python -m pytest tests/ -q            # unit tests (24 pass)
+python -m pytest tests/ -q            # unit tests (43 pass)
 python scripts/02_EDA.py              # fast smoke: reads modelling table
 python scripts/04_Feature_Engineering.py
 python scripts/05_Model.py            # full run: 30–70 min, ends with ALL CHECKS PASSED
