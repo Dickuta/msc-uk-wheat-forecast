@@ -32,23 +32,24 @@ def aggregate_seasonal(df, variable, season_windows, agg):
     Returns
     -------
     pandas.DataFrame
-        One row per year with columns ``year`` and ``<season>_<variable>``.
+        One row per harvest year with columns ``year`` and ``<season>_<variable>``.
     """
     records = []
-    for year in sorted(df["year"].unique()):
-        row = {"year": int(year)}
+    for harvest_year in sorted(df["year"].unique()):
+        row = {"year": int(harvest_year)}
         for season, (start, end, offset) in season_windows.items():
             if start <= end:
                 vals = df[
-                    (df["year"] == year + offset) & df["month"].between(start, end)
+                    (df["year"] == harvest_year + offset)
+                    & df["month"].between(start, end)
                 ][variable]
             else:  # window spans a calendar-year boundary (e.g. Dec(Y-1)-Feb(Y))
-                dec = df[(df["year"] == year + offset) & (df["month"] == start)][
-                    variable
-                ]
-                jan_feb = df[(df["year"] == year) & df["month"].between(1, end)][
-                    variable
-                ]
+                dec = df[
+                    (df["year"] == harvest_year + offset) & (df["month"] == start)
+                ][variable]
+                jan_feb = df[
+                    (df["year"] == harvest_year) & df["month"].between(1, end)
+                ][variable]
                 vals = pd.concat([dec, jan_feb])
             if len(vals) == 0:
                 row[f"{season}_{variable}"] = np.nan
