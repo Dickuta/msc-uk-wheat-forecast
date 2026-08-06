@@ -66,7 +66,7 @@ flowchart TD
         PI --> PI_CSV[(data/outputs/pi_*_corrected.csv)]
         SUMMARY --> ORACLE[Oracle exogenous\noracle_fc]
         ORACLE --> ORACLE_CSV[(data/outputs/oracle_exogenous_results.csv)]
-        SUMMARY --> VERIFY[verify() §5.10]
+        SUMMARY --> VERIFY[verify() - section 5.10]
         VERIFY --> BAL[assert_balanced_test_sets]
         VERIFY --> EXPECTED[(data/expected/)]
         VERIFY --> DECISION[data/outputs/decision_guide.md]
@@ -96,7 +96,7 @@ flowchart TD
     subgraph INPUTS[📥 EXTERNAL INPUTS]
         MET_OFFICE[Met Office HadUK-Grid\nTmean + Rainfall UK monthly\n1884–present]
         DEFRA_YIELD[DEFRA Cereal Production\nUK wheat yield t/ha\n1980–2024]
-        POLICY_DUMMIES[Policy structural breaks\n1992 MacSharry | 2005 SPS | 2022 Ukraine war]
+        POLICY_DUMMIES[Policy structural breaks\n1992 MacSharry; 2005 SPS; 2022 Ukraine war]
         CONFIG[config.py\nSEED=42, HORIZONS=[1,2,3,4]\nINITIAL_TRAIN_END=2000]
     end
 
