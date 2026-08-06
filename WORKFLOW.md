@@ -88,6 +88,208 @@ flowchart TD
 
 ---
 
+## 1b. End-to-End Pipeline Flow (Detailed)
+
+```mermaid
+flowchart TD
+    %% ============ INPUTS ============
+    subgraph INPUTS[📥 EXTERNAL INPUTS]
+        MET_OFFICE[Met Office HadUK-Grid\nTmean + Rainfall UK monthly\n1884–present]
+        DEFRA_YIELD[DEFRA Cereal Production\nUK wheat yield t/ha\n1980–2024]
+        POLICY_DUMMIES[Policy structural breaks\n1992 MacSharry | 2005 SPS | 2022 Ukraine war]
+        CONFIG[config.py\nSEED=42, HORIZONS=[1,2,3,4]\nINITIAL_TRAIN_END=2000]
+    end
+
+    %% ============ STAGE 01 ============
+    subgraph S01[🟢 Stage 01: Data Acquisition]
+        DL[download_met_series\nscripts/01_Data_Acquisition.py]
+        PARSE[Parse fixed-width .txt →\ntidy year/month/value CSV]
+        MANIFEST_GEN[SHA-256 manifest.csv\nprovenance: url, timestamp, hash]
+        AGG[aggregate_seasonal\nsrc/weather.py]
+        ALIGN_CHECK[assert_alignment\nsrc/guards.py:88]
+        UKMEAN_OUT[(uk_wheat_weather_seasonal_uk_mean.csv)]
+    end
+
+    %% ============ STAGE 02 ============
+    subgraph S02[🔵 Stage 02: EDA]
+        EDA[02_EDA.py\nFigures only, no outputs]
+    end
+
+    %% ============ STAGE 03 ============
+    subgraph S03[🟡 Stage 03: Modelling Table]
+        MERGE[Merge yield + UK-mean weather +\npolicy dummies → single CSV]
+        VALIDATE[Assert: 45 rows, no NaN,\nno duplicate years]
+        MODEL_TABLE_OUT[(uk_wheat_modelling_table_1980_2024.csv)]
+    end
+
+    %% ============ STAGE 04 ============
+    subgraph S04[🟣 Stage 04: Feature Engineering]
+        FEATURES[04_Feature_Engineering.py\nLags, rolling stats, scaling artifacts]
+        FEAT_OUT[(feature_matrices/)]
+    end
+
+    %% ============ STAGE 05 ============
+    subgraph S05[🔴 Stage 05: Model Comparison & Verification]
+        %% CV Engine
+        CV_ENGINE[ExpandingWindowCV\nsrc/cv.py]
+        ORIGIN_LOOP[for origin in 2000..2023]
+        HORIZON_LOOP[for h in 1..4]
+        TRAIN_MASK[train_df = year ≤ origin]
+        TEST_YEAR[test_year = origin + h]
+        
+        %% Guards at fold level
+        GUARD_LEAK[assert_training_precedes_origin]
+        GUARD_HORIZON[assert_horizon_consistent]
+        
+        %% Model factories
+        FACTORY{Model Factory\nsrc/models.py}
+        STAT_MODELS[Statistical:\nPersistence, ARIMA, SARIMA,\nARIMAX, Prophet]
+        ML_MODELS[ML (tuned once full series):\nRF, XGBoost, ARIMA+XGBoost]
+        
+        %% ARIMAX specific
+        ARIMAX_STEP[arimax_stepwise_selection]
+        SELECT_PVAL[select_exog_pvalues\nby-name, raises if missing]
+        
+        %% Per-origin cache
+        MODEL_CACHE[(model_cache[origin] →\nshared across h=1..4)]
+        
+        %% Predictions
+        PREDICT[predictor.predict(h)]
+        DETAILS_ACC[Accumulate per-fold details]
+        
+        %% Swallowed fold tracking
+        SKIPPED[skipped_folds list\n(horizon, test_year, error)]
+        WARN_SWALLOW[warn_on_swallowed_fits]
+        
+        %% Aggregation
+        SUMMARY[Per-model × horizon RMSE/MAE/n_test]
+        
+        %% DM Tests
+        DM_TESTS[Diebold-Mariano HLN\nsrc/metrics.py]
+        DM_CSV[(dm_test_results.csv)]
+        
+        %% Prediction Intervals
+        PI_ARIMA[ARIMA get_forecast().conf_int()]
+        PI_PROPHET[Prophet interval_width=0.95]
+        PI_CSV[(pi_*_corrected.csv)]
+        
+        %% Oracle
+        ORACLE_RUN[Re-run CV with oracle_fc=\nperfect weather foresight]
+        ORACLE_CSV[(oracle_exogenous_results.csv)]
+        
+        %% VERIFICATION GATE
+        VERIFY[verify() §5.10]
+        BAL_CHECK[assert_balanced_test_sets]
+        DIFF_CHECK[Diff vs data/expected/\natol 1e-4..1e-6]
+        DECISION_GEN[decision_guide.md auto-generated]
+        
+        %% Outputs
+        OUT_COMP[(model_comparison_results_corrected.csv)]
+        OUT_DET[(model_details_results_corrected.csv)]
+        OUT_BASE[(baseline_results.csv)]
+    end
+
+    %% ============ VERIFICATION REFERENCE ============
+    subgraph VERIFY_REF[✅ Verification Reference]
+        EXPECTED[(data/expected/\n6 canonical CSVs + manifest.md)]
+        THESIS_REF[(data/thesis_reference/\noriginal thesis numbers)]
+        CHANGES[(changes_vs_thesis.csv\n39 row diff ledger)]
+    end
+
+    %% ============ FLOW CONNECTIONS ============
+    MET_OFFICE --> DL
+    DEFRA_YIELD --> MERGE
+    POLICY_DUMMIES --> MERGE
+    CONFIG --> CV_ENGINE
+    CONFIG --> FACTORY
+    
+    DL --> PARSE
+    PARSE --> MANIFEST_GEN
+    PARSE --> AGG
+    AGG --> ALIGN_CHECK
+    ALIGN_CHECK --> UKMEAN_OUT
+    UKMEAN_OUT --> MERGE
+    
+    MERGE --> VALIDATE
+    VALIDATE --> MODEL_TABLE_OUT
+    
+    MODEL_TABLE_OUT --> EDA
+    MODEL_TABLE_OUT --> FEATURES
+    FEATURES --> FEAT_OUT
+    
+    MODEL_TABLE_OUT --> CV_ENGINE
+    CV_ENGINE --> ORIGIN_LOOP
+    ORIGIN_LOOP --> HORIZON_LOOP
+    HORIZON_LOOP --> TRAIN_MASK
+    TRAIN_MASK --> TEST_YEAR
+    TEST_YEAR --> GUARD_LEAK
+    GUARD_LEAK --> GUARD_HORIZON
+    GUARD_HORIZON --> FACTORY
+    
+    FACTORY --> STAT_MODELS
+    FACTORY --> ML_MODELS
+    STAT_MODELS --> ARIMAX_STEP
+    ARIMAX_STEP --> SELECT_PVAL
+    SELECT_PVAL --> MODEL_CACHE
+    ML_MODELS --> MODEL_CACHE
+    MODEL_CACHE --> PREDICT
+    PREDICT --> DETAILS_ACC
+    DETAILS_ACC -.-> SKIPPED
+    SKIPPED --> WARN_SWALLOW
+    
+    DETAILS_ACC --> SUMMARY
+    SUMMARY --> DM_TESTS
+    DM_TESTS --> DM_CSV
+    SUMMARY --> PI_ARIMA
+    SUMMARY --> PI_PROPHET
+    PI_ARIMA --> PI_CSV
+    PI_PROPHET --> PI_CSV
+    SUMMARY --> ORACLE_RUN
+    ORACLE_RUN --> ORACLE_CSV
+    
+    SUMMARY --> OUT_COMP
+    SUMMARY --> OUT_BASE
+    DETAILS_ACC --> OUT_DET
+    
+    OUT_COMP --> VERIFY
+    OUT_DET --> VERIFY
+    DM_CSV --> VERIFY
+    OUT_BASE --> VERIFY
+    ORACLE_CSV --> VERIFY
+    PI_CSV --> VERIFY
+    
+    VERIFY --> BAL_CHECK
+    VERIFY --> DIFF_CHECK
+    DIFF_CHECK --> EXPECTED
+    VERIFY --> DECISION_GEN
+    
+    EXPECTED --> THESIS_REF
+    THESIS_REF --> CHANGES
+    
+    %% ============ STYLING ============
+    classDef input fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef stage01 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef stage02 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef stage03 fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef stage04 fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef stage05 fill:#fff8e1,stroke:#f57f17,stroke-width:2px
+    classDef guard fill:#ffebee,stroke:#c62828,stroke-dasharray: 5 5
+    classDef output fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    classDef verify fill:#fce4ec,stroke:#c2185b,stroke-width:3px
+    
+    class MET_OFFICE,DEFRA_YIELD,POLICY_DUMMIES,CONFIG input
+    class DL,PARSE,MANIFEST_GEN,AGG,ALIGN_CHECK,UKMEAN_OUT stage01
+    class EDA stage02
+    class MERGE,VALIDATE,MODEL_TABLE_OUT stage03
+    class FEATURES,FEAT_OUT stage04
+    class CV_ENGINE,ORIGIN_LOOP,HORIZON_LOOP,TRAIN_MASK,TEST_YEAR,FACTORY,STAT_MODELS,ML_MODELS,ARIMAX_STEP,SELECT_PVAL,MODEL_CACHE,PREDICT,DETAILS_ACC,SKIPPED,WARN_SWALLOW,SUMMARY,DM_TESTS,DM_CSV,PI_ARIMA,PI_PROPHET,PI_CSV,ORACLE_RUN,ORACLE_CSV,OUT_COMP,OUT_DET,OUT_BASE stage05
+    class GUARD_LEAK,GUARD_HORIZON,SELECT_PVAL,BAL_CHECK guard
+    class VERIFY,DIFF_CHECK,DECISION_GEN verify
+    class EXPECTED,THESIS_REF,CHANGES verify
+```
+
+---
+
 ## 2. Stage-by-Stage Narrative
 
 ### Stage 01 — Data Acquisition (`scripts/01_Data_Acquisition.py`)
