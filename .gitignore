@@ -1,0 +1,22 @@
+# Bytecode
+__pycache__/
+*.py[cod]
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Pipeline-generated data (reproducible from scripts/01 and config)
+data/raw/
+data/processed/
+data/outputs/
+
+# Local test / tooling caches
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Transient run logs
+*.log
+
+# OS junk
+.DS_Store

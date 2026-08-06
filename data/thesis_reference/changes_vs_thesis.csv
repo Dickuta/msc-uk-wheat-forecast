@@ -1,0 +1,40 @@
+key,horizon,rmse_thesis,rmse_corrected,mae_thesis,mae_corrected,reason
+ARIMAX,1.0,0.7645632265517377,0.7707189822603839,0.6215682446809758,0.6308196666369909,ARIMAX p-value selection fixed (by-name vs positional slice)
+ARIMAX,2.0,0.8107073980201468,0.8127303892600479,0.677738134608455,0.6819420345017398,ARIMAX p-value selection fixed (by-name vs positional slice)
+ARIMAX,3.0,0.8268891449563789,0.830665502849862,0.697752842132624,0.6974293171720928,ARIMAX p-value selection fixed (by-name vs positional slice)
+ARIMAX,4.0,0.867632393218875,0.8624653941223976,0.737662397623801,0.73284520021269,ARIMAX p-value selection fixed (by-name vs positional slice)
+(DM) ARIMA vs ARIMAX h=1,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA+XGBoost vs ARIMAX h=1,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs Prophet h=1,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs RandomForest h=1,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs SARIMA h=1,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs XGBoost h=1,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA vs ARIMAX h=2,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA vs Prophet h=2,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA vs RandomForest h=2,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA vs XGBoost h=2,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA+XGBoost vs ARIMAX h=2,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs Prophet h=2,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs RandomForest h=2,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs SARIMA h=2,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs XGBoost h=2,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA vs ARIMA+XGBoost h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA vs ARIMAX h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA vs SARIMA h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA+XGBoost vs ARIMAX h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA+XGBoost vs Prophet h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA+XGBoost vs RandomForest h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA+XGBoost vs SARIMA h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA+XGBoost vs XGBoost h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs Prophet h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs RandomForest h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs SARIMA h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs XGBoost h=3,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA vs SARIMA h=4,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA+XGBoost vs ARIMAX h=4,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA+XGBoost vs RandomForest h=4,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMA+XGBoost vs XGBoost h=4,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs Prophet h=4,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs RandomForest h=4,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs SARIMA h=4,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
+(DM) ARIMAX vs XGBoost h=4,,,,,,DM statistic downstream of ARIMAX fix / rounding-level library drift
