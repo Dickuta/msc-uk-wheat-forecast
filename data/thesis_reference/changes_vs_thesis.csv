@@ -1,4 +1,5 @@
 key,horizon,rmse_thesis,rmse_corrected,mae_thesis,mae_corrected,reason
+(Oracle) ARIMA h=1,,,,added,ARIMA needs no exog so gets a context row (0% improvement); h=1 was dropped by an off-by-one in the oracle loop range ([2,3,4] -> [1,2,3,4])
 ARIMAX,1.0,0.7645632265517377,0.7707189822603839,0.6215682446809758,0.6308196666369909,ARIMAX p-value selection fixed (by-name vs positional slice)
 ARIMAX,2.0,0.8107073980201468,0.8127303892600479,0.677738134608455,0.6819420345017398,ARIMAX p-value selection fixed (by-name vs positional slice)
 ARIMAX,3.0,0.8268891449563789,0.830665502849862,0.697752842132624,0.6974293171720928,ARIMAX p-value selection fixed (by-name vs positional slice)
