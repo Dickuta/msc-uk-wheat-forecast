@@ -36,7 +36,9 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
 - [x] `pyproject.toml` added (project metadata + pytest config)
 - [x] `.gitignore` added (pycache, notebook checkpoints, outputs, data)
 - [x] `git init` in the pipeline root
-- [ ] Decide: commit the executed notebooks? (large `.ipynb` files; consider committing `.py` as source of truth and keeping notebooks out of git, or use `jupytext` diff)
+- [x] Decide: commit the executed notebooks? — **Committed everything on
+      2026-08-06** (`bf53691`), notebooks included (user decision). Repo-local
+      git identity `dickson <dickson@localhost>` set.
 
 ## 3. Code — remove duplication (`src/` owns the logic) (DONE except full verify)
 
