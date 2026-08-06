@@ -9,6 +9,7 @@ from src.guards import (
     assert_horizon_consistent,
     select_exog_pvalues,
     assert_alignment,
+    assert_alignment_spanning_year,
     assert_balanced_test_sets,
     warn_on_swallowed_fits,
 )
@@ -108,6 +109,41 @@ def test_assert_alignment_missing_rows():
     with pytest.raises(AlignmentError, match="no monthly rows"):
         assert_alignment(
             df, 10.0, 2011, months=[10, 11], year_offset=-1, value_col="tas", agg="mean"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# FR-3 · Seasonal alignment spot-check (boundary-spanning variant)
+# --------------------------------------------------------------------------- #
+def test_assert_alignment_spanning_year_pass():
+    df = pd.DataFrame(
+        {"year": [2010, 2010, 2011], "month": [12, 1, 2], "tas": [3.0, 5.0, 7.0]}
+    )
+    # winter of harvest 2011 = Dec(2010) + Jan-Feb(2011) -> mean = 5.0
+    assert_alignment_spanning_year(
+        df,
+        5.0,
+        2011,
+        first_month=12,
+        second_year_months=[1, 2],
+        value_col="tas",
+        agg="mean",
+    )
+
+
+def test_assert_alignment_spanning_year_fail():
+    df = pd.DataFrame(
+        {"year": [2010, 2010, 2011], "month": [12, 1, 2], "tas": [3.0, 5.0, 7.0]}
+    )
+    with pytest.raises(AlignmentError, match="alignment mismatch"):
+        assert_alignment_spanning_year(
+            df,
+            99.0,
+            2011,
+            first_month=12,
+            second_year_months=[1, 2],
+            value_col="tas",
+            agg="mean",
         )
 
 

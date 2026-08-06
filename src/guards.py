@@ -22,6 +22,8 @@ from __future__ import annotations
 import warnings
 from typing import Iterable, Sequence
 
+import pandas as pd
+
 
 class LeakageError(AssertionError):
     """Raised when information from the test period reaches a training-time decision."""
@@ -72,8 +74,6 @@ def select_exog_pvalues(pvalues, param_names: Sequence[str], selected: Sequence[
 
     Returns a pandas Series aligned to `selected` (preserving the .max() interface).
     """
-    import pandas as pd
-
     lookup = dict(zip(param_names, pvalues))
     missing = [c for c in selected if c not in lookup]
     if missing:
@@ -110,6 +110,7 @@ def assert_alignment(
 
     Only covers windows that fall entirely within one calendar year; the
     boundary-spanning winter window (Dec(Y-1)-Feb(Y)) is out of scope here.
+    Use ``assert_alignment_spanning_year`` for that case.
     """
     src_year = harvest_year + year_offset
     vals = monthly_df[
@@ -126,6 +127,54 @@ def assert_alignment(
             f"alignment mismatch for harvest year {harvest_year}: expected "
             f"{agg}({value_col}, {list(months)} of {src_year}) = {expected:.6f}, "
             f"got {seasonal_value:.6f}."
+        )
+
+
+def assert_alignment_spanning_year(
+    monthly_df,
+    seasonal_value: float,
+    harvest_year: int,
+    first_month: int,
+    second_year_months: Sequence[int],
+    value_col: str,
+    agg: str,
+    year_col: str = "year",
+    month_col: str = "month",
+    year_offset: int = -1,
+    atol: float = 1e-9,
+) -> None:
+    """Assert a boundary-spanning seasonal window was built correctly.
+
+    The winter window for harvest year Y spans the calendar-year boundary:
+    Dec(Y-1) from ``year_offset`` year + months {first_month}, and Jan-Feb(Y)
+    from ``harvest_year`` + ``second_year_months``.
+
+    Example (config winter = (12, 2, -1)):
+        assert_alignment_spanning_year(
+            monthly, seasonal.loc[Y, "winter_tas"], Y,
+            first_month=12, second_year_months=[1, 2],
+            value_col="tas", agg="mean",
+        )
+    """
+    prev_vals = monthly_df[
+        (monthly_df[year_col] == harvest_year + year_offset)
+        & (monthly_df[month_col] == first_month)
+    ][value_col]
+    later_vals = monthly_df[
+        (monthly_df[year_col] == harvest_year)
+        & (monthly_df[month_col].isin(list(second_year_months)))
+    ][value_col]
+    vals = pd.concat([prev_vals, later_vals])
+    if len(vals) == 0:
+        raise AlignmentError(
+            f"no monthly rows for winter of harvest year {harvest_year}: "
+            f"Dec({harvest_year + year_offset}) + Jan-Feb({harvest_year})."
+        )
+    expected = vals.mean() if agg == "mean" else vals.sum()
+    if abs(expected - seasonal_value) > atol:
+        raise AlignmentError(
+            f"alignment mismatch for winter of harvest year {harvest_year}: "
+            f"expected {agg} = {expected:.6f}, got {seasonal_value:.6f}."
         )
 
 

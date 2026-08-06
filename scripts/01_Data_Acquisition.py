@@ -87,11 +87,10 @@ def download_met_series(var_name, info):
     raw_path = config.RAW_DIR / info["raw_file"]
     if raw_path.exists():
         payload = raw_path.read_bytes()
-        sha = hashlib.sha256(payload).hexdigest()
         log.info(
             "Using frozen raw copy %s (sha256=%s...) - skipping download of %s",
             raw_path.name,
-            sha[:12],
+            hashlib.sha256(payload).hexdigest()[:12],
             url,
         )
     else:
@@ -104,9 +103,10 @@ def download_met_series(var_name, info):
                 f"Failed to download {var_name} from {url}: {exc}. "
                 f"Place a frozen copy at {raw_path} to bypass the network."
             ) from exc
-        raw_path.write_bytes(resp.content)
-        sha = hashlib.sha256(resp.content).hexdigest()
+        payload = resp.content
+        raw_path.write_bytes(payload)
 
+    sha = hashlib.sha256(payload).hexdigest()
     text = payload.decode("utf-8")
     lines = text.strip().split("\n")
     columns = [c.strip().lower() for c in lines[5].strip().split()]
@@ -237,10 +237,8 @@ seasonal_uk_mean = (
     .reset_index(drop=True)
 )
 
-# Spot-check seasonal alignment with assert_alignment (FR-3 / NFR-3 / F-1)
-# Only windows within a single calendar year can be checked this way (winter
-# spans Dec(Y-1)-Feb(Y) and needs a different check).
-from src.guards import assert_alignment
+# Spot-check seasonal alignment with the guards (FR-3 / F-1)
+from src.guards import assert_alignment, assert_alignment_spanning_year
 
 # Pick a reference harvest year to spot-check
 ref_year = int(seasonal_uk_mean["year"].iloc[len(seasonal_uk_mean) // 2])
@@ -275,7 +273,16 @@ assert_alignment(
     value_col="tas",
     agg="mean",
 )
-print("Seasonal alignment spot-check: OK")
+# winter = Dec(Y-1) + Jan-Feb(Y) -> boundary-spanning, use the spanning guard
+assert_alignment_spanning_year(
+    downloads["tas"]["df"],
+    seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "winter_tas"].iloc[0],
+    ref_year,
+    first_month=12,
+    second_year_months=[1, 2],
+    value_col="tas",
+    agg="mean",
+)
 print("Seasonal alignment spot-check: OK")
 
 seasonal_uk_mean.to_csv(config.WEATHER_SEASONAL_UK_MEAN_FILE, index=False)
