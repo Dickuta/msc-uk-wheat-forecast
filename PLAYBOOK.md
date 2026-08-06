@@ -92,6 +92,20 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
       `data/outputs/decision_guide.md` from the verified result CSVs (best model,
       per-horizon best, DM significances, PI coverage, oracle ceiling); summary
       renumbered §5.12. `config.OUTPUT_FILES["decision_guide"]` added
+- [x] `src/guards.py` added — six runtime invariant guards (LeakageError,
+      AlignmentError, `assert_training_precedes_origin`, `assert_horizon_consistent`,
+      `select_exog_pvalues`, `assert_alignment`, `assert_balanced_test_sets`,
+      `warn_on_swallowed_fits`); each maps to a specific silent-failure mode
+- [x] `src/models.py`: `arimax_stepwise_selection` now uses
+      `select_exog_pvalues` (NFR-9 / F-1) — raises if a covariate is not in
+      fitted `param_names`, eliminating the positional-slice bug class
+- [x] `src/cv.py`: fold-level `assert_training_precedes_origin` +
+      `assert_horizon_consistent` (NFR-1); `warn_on_swallowed_fits` replaces
+      the inline warning with a quantified message (NFR-2 / F-4)
+- [x] `scripts/05_Model.py`: §5.10 verify uses `assert_balanced_test_sets`
+      (NFR-2 / F-4) — raises instead of soft print
+- [x] `scripts/01_Data_Acquisition.py`: §1.4 spot-checks seasonal alignment
+      with `assert_alignment` (FR-3 / F-1) on a reference harvest year
 - [x] Notebook twins: `notebooks/01` and `03` re-synced from the renamed scripts
       via `jupytext --update` (outputs preserved); `05_Model.ipynb` regenerated
       from the refactored script — re-run 05 to repopulate outputs
@@ -103,8 +117,11 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
       (incl. year-boundary windows), `features.forecast_exogenous` (short/constant series),
       `cv.expanding_windows`/`evaluate_baseline`/`ExpandingWindowCV`,
       `models.fit_best_arima`/`predict_interval`/oracle plumbing/stepwise behaviour
+- [x] `tests/test_guards.py` — 10 tests for the six invariant guards
+      (LeakageError, AlignmentError, select_exog_pvalues, assert_alignment,
+      assert_balanced_test_sets, warn_on_swallowed_fits)
 - [x] `conftest.py` at root so `pytest` resolves `src` without installation
-- [x] `pytest` installed (9.1.1) + 24 tests passing from the pipeline root
+- [x] `pytest` installed (9.1.1) + 34 tests passing from the pipeline root
       (incl. `test_expanding_window_cv_records_skipped_folds`)
 - [ ] Optional: add a GitHub Actions workflow to run `pytest` on push
 

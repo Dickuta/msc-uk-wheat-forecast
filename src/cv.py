@@ -25,6 +25,11 @@ import numpy as np
 import pandas as pd
 
 from .metrics import mae, rmse
+from .guards import (
+    assert_training_precedes_origin,
+    assert_horizon_consistent,
+    warn_on_swallowed_fits,
+)
 
 
 @dataclass
@@ -101,6 +106,7 @@ class ExpandingWindowCV:
         np.random.seed(self.seed)
         model_cache = {}
         skipped = 0
+        attempted = 0
         for horizon in self.horizons:
             predictions = []
             for train_end in range(
@@ -109,6 +115,9 @@ class ExpandingWindowCV:
                 train_df, test_row, test_year = self._get_train_test(train_end, horizon)
                 if train_df is None:
                     continue
+                attempted += 1
+                assert_training_precedes_origin(train_df["year"], train_end)
+                assert_horizon_consistent(train_end, test_year, horizon)
                 if train_end not in model_cache:
                     if self.standardise:
                         train_df_scaled, _ = self._standardise_train_test(
@@ -160,11 +169,7 @@ class ExpandingWindowCV:
                 )
             if predictions:
                 self.results.extend(predictions)
-        if skipped:
-            warnings.warn(
-                f"{self.model_name}: {skipped} origin x horizon "
-                "predictions failed and were skipped"
-            )
+        warn_on_swallowed_fits(attempted, attempted - skipped, self.model_name)
         return self.summarise()
 
     def summarise(self):

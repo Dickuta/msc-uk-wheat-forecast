@@ -49,6 +49,7 @@ import numpy as np
 import pandas as pd
 
 from .features import forecast_exogenous
+from .guards import select_exog_pvalues
 
 
 def _fit_arima(model, **kwargs):
@@ -119,7 +120,7 @@ def arimax_stepwise_selection(train_df, covariate_cols, alpha=0.10, max_cov=5):
         if X is None:
             break
         pv = pd.Series(fitted.pvalues, index=fitted.param_names)
-        pvals = pv[selected].fillna(np.inf)
+        pvals = select_exog_pvalues(pv, pv.index, selected)
         steps.append(pvals.copy())
         if pvals.max() > alpha and len(selected) > 1:
             selected.remove(pvals.idxmax())

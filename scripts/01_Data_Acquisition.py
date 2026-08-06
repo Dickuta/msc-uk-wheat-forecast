@@ -236,6 +236,48 @@ seasonal_uk_mean = (
     .sort_values("year")
     .reset_index(drop=True)
 )
+
+# Spot-check seasonal alignment with assert_alignment (FR-3 / NFR-3 / F-1)
+# Only windows within a single calendar year can be checked this way (winter
+# spans Dec(Y-1)-Feb(Y) and needs a different check).
+from src.guards import assert_alignment
+
+# Pick a reference harvest year to spot-check
+ref_year = int(seasonal_uk_mean["year"].iloc[len(seasonal_uk_mean) // 2])
+
+# autumn = mean(Oct, Nov of Y-1) -> year_offset=-1, months=[10, 11]
+assert_alignment(
+    downloads["tas"]["df"],
+    seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "autumn_tas"].iloc[0],
+    ref_year,
+    months=[10, 11],
+    year_offset=-1,
+    value_col="tas",
+    agg="mean",
+)
+# spring = mean(Mar, Apr, May of Y) -> year_offset=0, months=[3, 4, 5]
+assert_alignment(
+    downloads["tas"]["df"],
+    seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "spring_tas"].iloc[0],
+    ref_year,
+    months=[3, 4, 5],
+    year_offset=0,
+    value_col="tas",
+    agg="mean",
+)
+# grainfill = mean(Jun, Jul, Aug of Y) -> year_offset=0, months=[6, 7, 8]
+assert_alignment(
+    downloads["tas"]["df"],
+    seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "grainfill_tas"].iloc[0],
+    ref_year,
+    months=[6, 7, 8],
+    year_offset=0,
+    value_col="tas",
+    agg="mean",
+)
+print("Seasonal alignment spot-check: OK")
+print("Seasonal alignment spot-check: OK")
+
 seasonal_uk_mean.to_csv(config.WEATHER_SEASONAL_UK_MEAN_FILE, index=False)
 print(f"UK-mean seasonal weather: {len(seasonal_uk_mean)} rows")
 seasonal_uk_mean.head()

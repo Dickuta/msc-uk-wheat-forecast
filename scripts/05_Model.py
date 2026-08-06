@@ -58,6 +58,7 @@ import config
 from src import plotting  # noqa: F401  (inline in notebooks, Agg when headless)
 from src.cv import ExpandingWindowCV, evaluate_baseline
 from src.metrics import rmse, mae, diebold_mariano
+from src.guards import assert_balanced_test_sets
 from src.models import (
     persistence_factory,
     arima_factory,
@@ -653,18 +654,8 @@ print("Verifying outputs against the canonical numbers in data/expected/...")
 # F-4 guard: every model must be evaluated on the same test years per horizon.
 # A model that silently failed to converge on some folds would drop test points
 # and get an unfairly easy RMSE; this makes that visible instead of invisible.
-sym_ok = True
-for h in config.HORIZONS:
-    ref = None
-    for model, grp in details[details["horizon"] == h].groupby("model"):
-        years = tuple(sorted(grp["test_year"].unique()))
-        if ref is None:
-            ref = years
-        elif years != ref:
-            sym_ok = False
-            print(f"  n_test symmetry VIOLATION at h={h}: {model} test years differ")
-print("  test-year symmetry across models:", "OK" if sym_ok else "VIOLATION")
-all_ok = all_ok and sym_ok
+assert_balanced_test_sets(details)
+print("  test-year symmetry across models: OK")
 
 all_ok &= verify(
     "model_comparison_results_corrected.csv",
