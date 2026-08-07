@@ -5,7 +5,7 @@ cell / `ALL CHECKS PASSED`).
 
 ## Origin — read this first
 
-**Regenerated 2026-08-06 from the corrected pipeline** (`scripts/05_Model.py`,
+**Regenerated 2026-08-06 from the corrected pipeline** (`stages/05_Model.py`,
 run of the same date). These files are the output of this repository's
 corrected code, not the thesis's original numbers.
 

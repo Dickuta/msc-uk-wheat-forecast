@@ -1,3 +1,15 @@
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     formats: py:percent,../notebooks//ipynb
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.3
+# ---
+
 # %% [markdown]
 # # 01 · Data Acquisition — acquire the raw data
 #
@@ -39,7 +51,6 @@
 # %%
 import hashlib
 import logging
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -47,23 +58,24 @@ import numpy as np
 import pandas as pd
 import requests
 
-# Resolve the pipeline root whether this file runs as a script or as a
-# notebook cell (where `__file__` is not defined), independent of the CWD.
-try:
-    _here = Path(__file__).resolve().parent
-except NameError:
-    _here = Path.cwd()
-PROJECT_ROOT = _here if (_here / "config.py").exists() else _here.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from src._bootstrap import init_script
+from src.logging_utils import (
+    get_stage_logger,
+    log_stage_start,
+    log_stage_end,
+    log_artifact,
+    timed_block,
+)
+
+display = init_script(width=140, max_columns=40)
+
+log = get_stage_logger(__name__, "01")
+log_stage_start(
+    log, "01", "Data Acquisition - download Met Office series, parse, aggregate"
+)
+
 import config
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
-)
-log = logging.getLogger(__name__)
-
-pd.set_option("display.width", 140)
-pd.set_option("display.max_columns", 40)
 
 # %% [markdown]
 # ## 1.2 Download the Met Office monthly series
@@ -168,10 +180,6 @@ def download_met_series(var_name, info):
     }
 
 
-downloads = {}
-for var_name, info in config.MET_OFFICE_SOURCES.items():
-    downloads[var_name] = download_met_series(var_name, info)
-
 # %% [markdown]
 # ## 1.3 Provenance manifest
 #
@@ -179,29 +187,33 @@ for var_name, info in config.MET_OFFICE_SOURCES.items():
 # download timestamp and the SHA-256 checksum. This is the answer to the
 # question *"where did this number come from?"*.
 
-# %%
-manifest_rows = []
-for var_name, dl in downloads.items():
-    manifest_rows.append(
-        {
-            "variable": dl["variable"],
-            "source": config.MET_OFFICE_SOURCES[var_name]["description"],
-            "url": config.MET_OFFICE_SOURCES[var_name]["url"],
-            "raw_file": dl["raw_path"].name,
-            "parsed_file": dl["csv_path"].name,
-            "downloaded_at_utc": datetime.fromtimestamp(
-                dl["raw_path"].stat().st_mtime, timezone.utc
-            ).strftime("%Y-%m-%d %H:%M:%S"),
-            "sha256": dl["sha256"],
-            "n_monthly_rows": len(dl["df"]),
-            "status": "OK",
-        }
-    )
 
-manifest = pd.DataFrame(manifest_rows)
-manifest_path = config.RAW_DIR / "manifest.csv"
-manifest.to_csv(manifest_path, index=False)
-manifest
+# %%
+def build_manifest(downloads):
+    """Write the provenance manifest CSV and display it."""
+    manifest_rows = []
+    for var_name, dl in downloads.items():
+        manifest_rows.append(
+            {
+                "variable": dl["variable"],
+                "source": config.MET_OFFICE_SOURCES[var_name]["description"],
+                "url": config.MET_OFFICE_SOURCES[var_name]["url"],
+                "raw_file": dl["raw_path"].name,
+                "parsed_file": dl["csv_path"].name,
+                "downloaded_at_utc": datetime.fromtimestamp(
+                    dl["raw_path"].stat().st_mtime, timezone.utc
+                ).strftime("%Y-%m-%d %H:%M:%S"),
+                "sha256": dl["sha256"],
+                "n_monthly_rows": len(dl["df"]),
+                "status": "OK",
+            }
+        )
+    manifest = pd.DataFrame(manifest_rows)
+    manifest_path = config.RAW_DIR / "manifest.csv"
+    manifest.to_csv(manifest_path, index=False)
+    display(manifest)
+    return manifest
+
 
 # %% [markdown]
 # ## 1.4 Aggregate monthly weather to phenological windows
@@ -210,84 +222,93 @@ manifest
 # the **UK-mean** seasonal weather table that 03 uses to reproduce the weather
 # building block from first principles.
 
-
 # %%
 # The seasonal alignment (autumn = Oct-Nov of Y-1, winter = Dec(Y-1)-Feb(Y),
 # spring = Mar-May(Y), grain fill = Jun-Aug(Y)) lives in `src/weather.py` and
 # is shared with stage 03, so the two can never drift apart.
 from src.weather import aggregate_seasonal
-
-seasonal_dfs = []
-for var_name, dl in downloads.items():
-    seasonal_dfs.append(
-        aggregate_seasonal(
-            dl["df"],
-            var_name,
-            config.SEASON_WINDOWS,
-            config.MET_OFFICE_SOURCES[var_name]["agg"],
-        )
-    )
-
-seasonal_uk_mean = seasonal_dfs[0]
-for df in seasonal_dfs[1:]:
-    seasonal_uk_mean = seasonal_uk_mean.merge(df, on="year", how="outer")
-seasonal_uk_mean = (
-    seasonal_uk_mean[seasonal_uk_mean["year"].between(*config.MODEL_TABLE_YEARS)]
-    .sort_values("year")
-    .reset_index(drop=True)
-)
-
-# Spot-check seasonal alignment with the guards (FR-3 / F-1)
 from src.guards import assert_alignment, assert_alignment_spanning_year
 
-# Pick a reference harvest year to spot-check
-ref_year = int(seasonal_uk_mean["year"].iloc[len(seasonal_uk_mean) // 2])
 
-# autumn = mean(Oct, Nov of Y-1) -> year_offset=-1, months=[10, 11]
-assert_alignment(
-    downloads["tas"]["df"],
-    seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "autumn_tas"].iloc[0],
-    ref_year,
-    months=[10, 11],
-    year_offset=-1,
-    value_col="tas",
-    agg="mean",
-)
-# spring = mean(Mar, Apr, May of Y) -> year_offset=0, months=[3, 4, 5]
-assert_alignment(
-    downloads["tas"]["df"],
-    seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "spring_tas"].iloc[0],
-    ref_year,
-    months=[3, 4, 5],
-    year_offset=0,
-    value_col="tas",
-    agg="mean",
-)
-# grainfill = mean(Jun, Jul, Aug of Y) -> year_offset=0, months=[6, 7, 8]
-assert_alignment(
-    downloads["tas"]["df"],
-    seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "grainfill_tas"].iloc[0],
-    ref_year,
-    months=[6, 7, 8],
-    year_offset=0,
-    value_col="tas",
-    agg="mean",
-)
-# winter = Dec(Y-1) + Jan-Feb(Y) -> boundary-spanning, use the spanning guard
-assert_alignment_spanning_year(
-    downloads["tas"]["df"],
-    seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "winter_tas"].iloc[0],
-    ref_year,
-    first_month=12,
-    second_year_months=[1, 2],
-    value_col="tas",
-    agg="mean",
-)
-print("Seasonal alignment spot-check: OK")
+def aggregate_seasonal_weather(downloads):
+    """Aggregate monthly series to seasonal windows, spot-check, and save."""
+    seasonal_dfs = []
+    for var_name, dl in downloads.items():
+        seasonal_dfs.append(
+            aggregate_seasonal(
+                dl["df"],
+                var_name,
+                config.SEASON_WINDOWS,
+                config.MET_OFFICE_SOURCES[var_name]["agg"],
+            )
+        )
+    seasonal_uk_mean = seasonal_dfs[0]
+    for df in seasonal_dfs[1:]:
+        seasonal_uk_mean = seasonal_uk_mean.merge(df, on="year", how="outer")
+    seasonal_uk_mean = (
+        seasonal_uk_mean[seasonal_uk_mean["year"].between(*config.MODEL_TABLE_YEARS)]
+        .sort_values("year")
+        .reset_index(drop=True)
+    )
 
-seasonal_uk_mean.to_csv(config.WEATHER_SEASONAL_UK_MEAN_FILE, index=False)
-print(f"UK-mean seasonal weather: {len(seasonal_uk_mean)} rows")
-seasonal_uk_mean.head()
+    # Spot-check seasonal alignment with the guards (FR-3 / F-1)
+    ref_year = int(seasonal_uk_mean["year"].iloc[len(seasonal_uk_mean) // 2])
+
+    # autumn = mean(Oct, Nov of Y-1) -> year_offset=-1, months=[10, 11]
+    assert_alignment(
+        downloads["tas"]["df"],
+        seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "autumn_tas"].iloc[
+            0
+        ],
+        ref_year,
+        months=[10, 11],
+        year_offset=-1,
+        value_col="tas",
+        agg="mean",
+    )
+    # spring = mean(Mar, Apr, May of Y) -> year_offset=0, months=[3, 4, 5]
+    assert_alignment(
+        downloads["tas"]["df"],
+        seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "spring_tas"].iloc[
+            0
+        ],
+        ref_year,
+        months=[3, 4, 5],
+        year_offset=0,
+        value_col="tas",
+        agg="mean",
+    )
+    # grainfill = mean(Jun, Jul, Aug of Y) -> year_offset=0, months=[6, 7, 8]
+    assert_alignment(
+        downloads["tas"]["df"],
+        seasonal_uk_mean.loc[
+            seasonal_uk_mean["year"] == ref_year, "grainfill_tas"
+        ].iloc[0],
+        ref_year,
+        months=[6, 7, 8],
+        year_offset=0,
+        value_col="tas",
+        agg="mean",
+    )
+    # winter = Dec(Y-1) + Jan-Feb(Y) -> boundary-spanning, use the spanning guard
+    assert_alignment_spanning_year(
+        downloads["tas"]["df"],
+        seasonal_uk_mean.loc[seasonal_uk_mean["year"] == ref_year, "winter_tas"].iloc[
+            0
+        ],
+        ref_year,
+        first_month=12,
+        second_year_months=[1, 2],
+        value_col="tas",
+        agg="mean",
+    )
+    print("Seasonal alignment spot-check: OK")
+
+    seasonal_uk_mean.to_csv(config.WEATHER_SEASONAL_UK_MEAN_FILE, index=False)
+    print(f"UK-mean seasonal weather: {len(seasonal_uk_mean)} rows")
+    display(seasonal_uk_mean.head())
+    return seasonal_uk_mean
+
 
 # %% [markdown]
 # ## 1.5 What the raw download provides vs. what the thesis numbers need
@@ -308,7 +329,31 @@ seasonal_uk_mean.head()
 #
 # ## 1.6 Summary
 
+
 # %%
-print("Raw data now on disk:")
-for path in sorted(config.RAW_DIR.iterdir()):
-    print(f"  {path.name:45s} {path.stat().st_size:>10,} bytes")
+def main():
+    """Run the full stage 01: download, manifest, aggregate, verify, summarise."""
+    config.RAW_DIR.mkdir(parents=True, exist_ok=True)
+
+    downloads = {}
+    for var_name, info in config.MET_OFFICE_SOURCES.items():
+        with timed_block(log, f"download_{var_name}", variable=var_name):
+            downloads[var_name] = download_met_series(var_name, info)
+
+    with timed_block(log, "build_manifest", n_vars=len(downloads)):
+        build_manifest(downloads)
+
+    with timed_block(log, "aggregate_seasonal", ref_year=None):
+        aggregate_seasonal_weather(downloads)
+
+    log_stage_end(log, "01", success=True)
+    log.info("Raw data now on disk", extra={"stage": "01"})
+    for path in sorted(config.RAW_DIR.iterdir()):
+        log_artifact(log, path, "raw file")
+    for path in sorted(config.PROCESSED_DIR.iterdir()):
+        log_artifact(log, path, "processed file")
+
+
+# %%
+if __name__ == "__main__":
+    main()

@@ -4,13 +4,76 @@
 
 ---
 
+## 🎯 QUICK RECALL: The Pipeline in 3 Sentences
+
+> **"We download UK weather, merge it with wheat yields and policy events into ONE modelling table, then run 8 forecasting models through an expanding-window CV that self-verifies against canonical thesis numbers."**
+
+**Memory hooks:**
+- **1 table** → `uk_wheat_modelling_table_1980_2024.csv` (the contract)
+- **5 stages** → 01 Acquire → 02 Explore → 03 Assemble → 04 Demo → 05 Model & Verify
+- **1 gate** → Stage 05 `verify()` prints `ALL CHECKS PASSED` or fails loud
+- **6 guards** → `src/guards.py` catches leakage, misalignment, swallowed folds at runtime
+
+---
+
+## 0. Project Structure at a Glance
+
+```
+uk_wheat_pipeline/
+├── config.py                 # every path, URL, seed, hyperparameter
+├── main.py                   # orchestrator (importlib, not subprocess)
+├── pyproject.toml            # project metadata + pytest config
+├── requirements.txt          # pinned runtime deps
+├── requirements-dev.txt      # test + notebook tooling
+├── PLAYBOOK.md               # live maintenance checklist
+├── WORKFLOW.md               # this document
+├── README.md                 # user-facing overview
+├── src/                      # shared, importable code (single source of truth)
+│   ├── __init__.py
+│   ├── _bootstrap.py         # common imports, path setup, display fallback
+│   ├── cv.py                 # ExpandingWindowCV + baselines
+│   ├── models.py             # 8 model factories + tuning + PI/oracle hooks
+│   ├── metrics.py            # RMSE, MAE, Diebold–Mariano (HLN)
+│   ├── weather.py            # aggregate_seasonal (phenological windows)
+│   ├── features.py           # forecast_exogenous (ARIMA 1,0,0 exog projection)
+│   ├── guards.py             # 6 runtime invariant guards
+│   └── plotting.py           # chart style, headless Agg fallback
+├── stages/                   # 5 runnable entry points (each has main())
+│   ├── 01_Data_Acquisition.py
+│   ├── 02_EDA.py
+│   ├── 03_Modelling_Table.py
+│   ├── 04_Feature_Engineering.py
+│   └── 05_Model.py
+├── notebooks/                # jupytext-paired .ipynb (executed, figures inline)
+│   ├── 01_Data_Acquisition.ipynb
+│   ├── 02_EDA.ipynb
+│   ├── 03_Modelling_Table.ipynb
+│   ├── 04_Feature_Engineering.ipynb
+│   └── 05_Model.ipynb
+├── tests/                    # 43 fast unit tests (pytest)
+│   ├── test_cv.py
+│   ├── test_features.py
+│   ├── test_guards.py
+│   ├── test_metrics.py
+│   ├── test_models.py
+│   └── test_weather.py
+└── data/
+    ├── raw/                  # downloaded by 01 (Met Office + manifest)
+    ├── processed/            # modelling table (single downstream input)
+    ├── expected/             # canonical outputs (verification gate)
+    ├── thesis_reference/     # archived original thesis numbers
+    └── outputs/              # result CSVs + decision guide (charts inline)
+```
+
+---
+
 ## 1. High-Level Flow (Mermaid)
 
 ```mermaid
 flowchart TD
     %% ====== DATA LAYER ======
     subgraph RAW[Raw Data Acquisition]
-        MET[Met Office UK Series\nTmean + Rainfall] --> DL[download_met_series\n01_Data_Acquisition.py]
+        MET[Met Office UK Series\nTmean + Rainfall] --> DL[download_met_series\nstages/01_Data_Acquisition.py]
         DL -->|frozen raw .txt| RAW_DISK[(data/raw/)]
         DL -->|parsed CSV| PARSED[(data/raw/met_office_*_monthly.csv)]
         RAW_DISK -->|SHA-256 manifest| MANIFEST[data/raw/manifest.csv]
@@ -23,7 +86,7 @@ flowchart TD
     end
 
     subgraph MODEL_TABLE[Canonical Modelling Table]
-        UKMEAN --> MT[03_Modelling_Table.py]
+        UKMEAN --> MT[stages/03_Modelling_Table.py]
         YIELD[DEFRA yield 1980-2024] --> MT
         POLICY[Policy dummies 1992/2005/2022] --> MT
         MT -->|single CSV, no missing| MODEL_CSV[(data/processed/uk_wheat_modelling_table_1980_2024.csv)]
@@ -31,7 +94,7 @@ flowchart TD
 
     %% ====== MODEL LAYER ======
     subgraph FEATURES[Feature Engineering]
-        MODEL_CSV --> FE[04_Feature_Engineering.py]
+        MODEL_CSV --> FE[stages/04_Feature_Engineering.py]
         FE -->|splits, scales, lags| FEATURES_OUT[(data/processed/feature_matrices/)]
     end
 
@@ -103,7 +166,7 @@ flowchart TD
 
     %% ============ STAGE 01 ============
     subgraph S01[🟢 Stage 01: Data Acquisition]
-        DL[download_met_series\nscripts/01_Data_Acquisition.py]
+        DL[download_met_series\nstages/01_Data_Acquisition.py]
         PARSE[Parse fixed-width .txt →\ntidy year/month/value CSV]
         MANIFEST_GEN[SHA-256 manifest.csv\nprovenance: url, timestamp, hash]
         AGG[aggregate_seasonal\nsrc/weather.py]
@@ -291,9 +354,152 @@ flowchart TD
 
 ---
 
+## 1c. Data Lineage Diagram (ASCII)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           EXTERNAL SOURCES                                       │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐              │
+│  │ Met Office       │  │ DEFRA Yield      │  │ Policy Events    │              │
+│  │ HadUK-Grid 1km   │  │ 1980-2024 t/ha   │  │ 1992/2005/2022   │              │
+│  │ Tmean + Rainfall │  │ (canonical)      │  │ (constructed)    │              │
+│  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘              │
+└───────────┼─────────────────────┼─────────────────────┼────────────────────────┘
+            ▼                     ▼                     ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           STAGE 01: DATA ACQUISITION                             │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │ download_met_series()                                                    │   │
+│  │   • HTTP GET (frozen after first run)                                    │   │
+│  │   • SHA-256 recorded in manifest.csv                                     │   │
+│  │   • Parse fixed-width .txt → year/month/value CSV                        │   │
+│  └────────────────────────────┬─────────────────────────────────────────────┘   │
+│                               ▼                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │ aggregate_seasonal()  ──►  assert_alignment() (guard)                    │   │
+│  │   • autumn  = Oct-Nov Y-1                                                │   │
+│  │   • winter  = Dec Y-1 – Feb Y  (year boundary)                          │   │
+│  │   • spring  = Mar-May Y                                                  │   │
+│  │   • grainfill = Jun-Aug Y                                                │   │
+│  └────────────────────────────┬─────────────────────────────────────────────┘   │
+│                               ▼                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │ OUTPUT: uk_wheat_weather_seasonal_uk_mean.csv                            │   │
+│  │         data/raw/manifest.csv (provenance)                               │   │
+│  └──────────────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────┬────────────────────────────────────┘
+                                             ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           STAGE 03: MODELLING TABLE                              │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │ MERGE (inner join on year)                                               │   │
+│  │   • yield_t_ha (from DEFRA)                                              │   │
+│  │   • 8 weather covariates (from UK-mean seasonal)                         │   │
+│  │   • 3 policy dummies (cap_1992, cap_2005, ukraine_2022)                 │   │
+│  │ VALIDATE: 45 rows, 1980-2024, no NaN, no dup years                      │   │
+│  └────────────────────────────┬─────────────────────────────────────────────┘   │
+│                               ▼                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │ OUTPUT: uk_wheat_modelling_table_1980_2024.csv  ◄── SINGLE SOURCE OF TRUTH │   │
+│  └──────────────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────┬────────────────────────────────────┘
+                                             ▼
+              ┌──────────────────────────────┼──────────────────────────────┐
+              ▼                              ▼                              ▼
+┌─────────────────────────┐  ┌─────────────────────────┐  ┌─────────────────────────┐
+│     STAGE 02: EDA       │  │  STAGE 04: FEATURES     │  │    STAGE 05: MODELS     │
+│  (read-only, figures)   │  │  (demo transforms)      │  │  (full CV + verify)     │
+└─────────────────────────┘  └─────────────────────────┘  └───────────┬─────────────┘
+                                                                      ▼
+                          ┌─────────────────────────────────────────────────────┐
+                          │           EXPANDING-WINDOW CV PROTOCOL               │
+                          │  for origin in 2000..2023:                          │
+                          │    train = rows[year ≤ origin]                      │
+                          │    for h in [1,2,3,4]:                              │
+                          │      test_year = origin + h                         │
+                          │      GUARD: assert_training_precedes_origin()       │
+                          │      GUARD: assert_horizon_consistent()             │
+                          │      predictor = factory(train, h)  # cached        │
+                          │      y_pred = predictor.predict(h)                  │
+                          │      GUARD: warn_on_swallowed_fits()                │
+                          │      accumulate details                             │
+                          └────────────────────────────┬────────────────────────┘
+                                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           STAGE 05: POST-CV PIPELINE                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
+│  │ Aggregation  │  │ DM Tests     │  │ PIs          │  │ Oracle       │        │
+│  │ RMSE/MAE/    │  │ HLN-corrected│  │ ARIMA/Prophet│  │ oracle_fc    │        │
+│  │ n_test per   │  │ pairwise     │  │ 95% coverage │  │ perfect      │        │
+│  │ model×horizon│  │              │  │              │  │ weather      │        │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘        │
+│         │                 │                 │                 │                │
+│         └─────────────────┼─────────────────┼─────────────────┘                │
+│                           ▼                                                 │
+│              ┌────────────────────────┐                                    │
+│              │ VERIFICATION GATE       │                                    │
+│              │ • assert_balanced_      │                                    │
+│              │   test_sets()           │                                    │
+│              │ • verify() diffs vs     │                                    │
+│              │   data/expected/        │                                    │
+│              │ • ALL CHECKS PASSED     │                                    │
+│              └───────────┬─────────────┘                                    │
+│                          ▼                                                 │
+│         ┌───────────────┼───────────────┐                                 │
+│         ▼               ▼               ▼                                 │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐                             │
+│  │ Output    │  │ Output    │  │ decision_ │                             │
+│  │ CSVs      │  │ PIs/      │  │ guide.md  │                             │
+│  │ (6 files) │  │ Oracle    │  │ (auto)    │                             │
+│  └───────────┘  └───────────┘  └───────────┘                             │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                                        │
+                                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         VERIFICATION REFERENCE                                   │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐                 │
+│  │ data/expected/  │  │ data/thesis_    │  │ changes_vs_     │                 │
+│  │ 6 canonical     │  │ reference/      │  │ thesis.csv      │                 │
+│  │ CSVs + manifest │  │ original thesis │  │ 39-row diff     │                 │
+│  │ (gate target)   │  │ numbers (viva)  │  │ ledger          │                 │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 1d. CV Fold Structure (Visual)
+
+```
+ORIGIN = 2000                          ORIGIN = 2005                          ORIGIN = 2023
+┌─────────────────────────────┐       ┌─────────────────────────────┐       ┌─────────────────────────────┐
+│ TRAIN (1980–2000)           │       │ TRAIN (1980–2005)           │       │ TRAIN (1980–2023)           │
+│ ┌──┬──┬──┬──┬──┬──┬──┬──┐   │       │ ┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐  │       │ ┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐  │
+│ │80│81│82│83│84│85│86│87│...│       │ │80│81│82│83│84│85│86│87│...│...│  │       │ │80│81│82│...│21│22│23│  │  │
+│ └──┴──┴──┴──┴──┴──┴──┴──┘   │       │ └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘  │       │ └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘  │
+│           ▲                 │       │            ▲                 │       │            ▲                 │
+│           │                 │       │            │                 │       │            │                 │
+│      max_year=2000          │       │      max_year=2005           │       │      max_year=2023           │
+└─────────────────────────────┘       └─────────────────────────────┘       └─────────────────────────────┘
+           │                                    │                                    │
+           ▼                                    ▼                                    ▼
+TESTS for h=1,2,3,4:                    TESTS for h=1,2,3,4:                    TESTS for h=1,2,3,4:
+  h=1 → year 2001                        h=1 → year 2006                        h=1 → year 2024
+  h=2 → year 2002                        h=2 → year 2007                        h=2 → (no data)
+  h=3 → year 2003                        h=3 → year 2008                        h=3 → (no data)
+  h=4 → year 2004                        h=4 → year 2009                        h=4 → (no data)
+
+GUARDS at EACH FOLD:
+  ✓ assert_training_precedes_origin(train_df, origin)
+  ✓ assert_horizon_consistent(test_year, origin, horizon)
+  ✓ warn_on_swallowed_fits(attempted, succeeded, model_name)
+```
+
+---
+
 ## 2. Stage-by-Stage Narrative
 
-### Stage 01 — Data Acquisition (`scripts/01_Data_Acquisition.py`)
+### Stage 01 — Data Acquisition (`stages/01_Data_Acquisition.py`)
 
 | **What** | **Why** | **Where** | **When** |
 |----------|---------|-----------|----------|
@@ -307,7 +513,7 @@ flowchart TD
 
 ---
 
-### Stage 02 — EDA (`scripts/02_EDA.py`)
+### Stage 02 — EDA (`stages/02_EDA.py`)
 
 | **What** | **Why** | **Where** | **When** |
 |----------|---------|-----------|----------|
@@ -317,7 +523,7 @@ flowchart TD
 
 ---
 
-### Stage 03 — Modelling Table (`scripts/03_Modelling_Table.py`)
+### Stage 03 — Modelling Table (`stages/03_Modelling_Table.py`)
 
 | **What** | **Why** | **Where** | **When** |
 |----------|---------|-----------|----------|
@@ -328,7 +534,7 @@ flowchart TD
 
 ---
 
-### Stage 04 — Feature Engineering (`scripts/04_Feature_Engineering.py`)
+### Stage 04 — Feature Engineering (`stages/04_Feature_Engineering.py`)
 
 | **What** | **Why** | **Where** | **When** |
 |----------|---------|-----------|----------|
@@ -338,7 +544,7 @@ flowchart TD
 
 ---
 
-### Stage 05 — Model Comparison & Verification (`scripts/05_Model.py`)
+### Stage 05 — Model Comparison & Verification (`stages/05_Model.py`)
 
 This is the **thesis engine**. It runs the entire comparison and self-verifies.
 
@@ -397,6 +603,7 @@ This is the **thesis engine**. It runs the entire comparison and self-verifies.
 
 | Module | Responsibility | Key Guards Used |
 |--------|----------------|-----------------|
+| `_bootstrap.py` | Common imports, path setup, display fallback, modelling table loader | — |
 | `cv.py` | Expanding-window protocol, baselines, per-origin cache | `assert_training_precedes_origin`, `assert_horizon_consistent`, `warn_on_swallowed_fits` (fold + PI loops) |
 | `models.py` | 8 model factories, `fit_best_arima`, `arimax_stepwise_selection`, `tune_rf/tune_xgb`, `predict_interval` | `select_exog_pvalues` |
 | `metrics.py` | RMSE, MAE, Diebold–Mariano (HLN) | — |
@@ -418,28 +625,28 @@ This is the **thesis engine**. It runs the entire comparison and self-verifies.
 │          grainfill_temp, grainfill_rain, cap_1992, cap_2005,    │
 │          ukraine_2022                                           │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+                               │
+                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ CV FOLD (per origin, per horizon)                               │
 │ train_df = rows where year ≤ origin                              │
 │ test_row = row where year = origin + horizon                    │
 │ Guards: training max ≤ origin, test_year = origin + h           │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+                               │
+                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ MODEL FACTORY(train_df, horizon) → predictor.predict(h)         │
 │ Returns scalar forecast; ARIMA/Prophet also .predict_interval() │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+                               │
+                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ DETAILS DF (one row per fold)                                   │
 │ model, horizon, test_year, y_true, y_pred, train_time, mem      │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+                               │
+                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ SUMMARY DF (per model × horizon)                                │
 │ model, horizon, rmse, mae, n_test, avg_train_time, avg_mem      │
@@ -462,6 +669,8 @@ This is the **thesis engine**. It runs the entire comparison and self-verifies.
 | **Thesis numbers archived in `data/thesis_reference/`** | Viva trail; `changes_vs_thesis.csv` documents every difference (F-3) |
 | **ML tuning on full series (disclosed)** | Reproduces corrected Colab exactly; asymmetric vs statistical models but documented (NFR-1/2) |
 | **Decision guide auto-generated** | Prose and data can never drift (NFR-10) |
+| **`main.py` uses `importlib` not `subprocess`** | Stages are composable Python modules; faster; no shell escaping issues |
+| **DRY via `src/_bootstrap.py`** | Eliminates duplicated sys.path, display, pandas config, modelling table loader, common imports |
 
 ---
 
@@ -491,13 +700,13 @@ python main.py
 python main.py --stage 03
 
 # Individual script (no orchestration)
-python scripts/05_Model.py
+python stages/05_Model.py
 
-# Unit tests (all 34 pass)
+# Unit tests (all 43 pass)
 python -m pytest tests/ -q
 
 # Notebook sync after .py edits
-jupytext --update --to ipynb -o notebooks/05_Model.ipynb scripts/05_Model.py
+jupytext --sync stages/05_Model.py
 ```
 
 ---
@@ -514,4 +723,4 @@ jupytext --update --to ipynb -o notebooks/05_Model.ipynb scripts/05_Model.py
 
 ---
 
-*Generated 2026-08-06. This document reflects the state after the runtime invariant guards (`src/guards.py`) were integrated and the full pipeline verified (`ALL CHECKS PASSED`).*
+*Generated 2026-08-07. This document reflects the state after the runtime invariant guards (`src/guards.py`) were integrated, DRY refactoring (`src/_bootstrap.py`, `config.WEATHER_RENAME`), folder rename (`scripts/` → `stages/`), and the full pipeline verified (`ALL CHECKS PASSED` for stages 01–04; stage 05 imports OK, full run 70+ min).*

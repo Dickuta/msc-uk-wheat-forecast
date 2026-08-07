@@ -11,29 +11,44 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import subprocess
+import importlib.util
 import sys
+import traceback
 from pathlib import Path
 
 STAGES = [
-    ("01", "scripts/01_Data_Acquisition.py", "Acquire raw Met Office data"),
-    ("02", "scripts/02_EDA.py", "Exploratory data analysis"),
-    ("03", "scripts/03_Modelling_Table.py", "Build the modelling table"),
-    ("04", "scripts/04_Feature_Engineering.py", "Feature engineering"),
-    ("05", "scripts/05_Model.py", "Model comparison, DM tests, PIs, oracle, verify"),
+    ("01", "stages/01_Data_Acquisition.py", "Acquire raw Met Office data"),
+    ("02", "stages/02_EDA.py", "Exploratory data analysis"),
+    ("03", "stages/03_Modelling_Table.py", "Build the modelling table"),
+    ("04", "stages/04_Feature_Engineering.py", "Feature engineering"),
+    ("05", "stages/05_Model.py", "Model comparison, DM tests, PIs, oracle, verify"),
 ]
 
 ROOT = Path(__file__).resolve().parent
 
 
 def run_stage(script: str, stage_id: str) -> int:
-    """Execute one stage script and return its exit code."""
+    """Import a stage script as a module and call its main()."""
     script_path = ROOT / script
     if not script_path.exists():
         print(f"[ERROR] {script} not found", file=sys.stderr)
         return 1
     print(f"\n=== Running stage {stage_id}: {script} ===")
-    return subprocess.call([sys.executable, str(script_path)])
+    mod_name = f"stage_{stage_id}"
+    spec = importlib.util.spec_from_file_location(mod_name, script_path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = mod
+    try:
+        spec.loader.exec_module(mod)
+        mod.main()
+    except AssertionError as exc:
+        print(f"\n[FAILED] Stage {stage_id}: {exc}", file=sys.stderr)
+        return 1
+    except Exception:
+        print(f"\n[FAILED] Stage {stage_id} with unhandled exception:", file=sys.stderr)
+        traceback.print_exc()
+        return 1
+    return 0
 
 
 def main():

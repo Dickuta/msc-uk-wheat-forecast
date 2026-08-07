@@ -16,11 +16,14 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
 - **No code comments unless they explain *why*.** The stage scripts are prose
   notebooks; keep them readable.
 - **One source of truth for logic.** Anything reused (model specs, CV, exog
-  forecasting, seasonal alignment) lives in `src/`, not in `scripts/`.
+  forecasting, seasonal alignment) lives in `src/`, not in `stages/`.
+- **Entry-point discipline.** Each stage script exposes `def main()` and an
+  `if __name__ == "__main__": main()` guard. `main.py` imports and calls
+  `main()` via `importlib` (no subprocess), so stages are composable units.
 
 ## 1. File organisation (DONE)
 
-- [x] Stage `.py` files moved to `scripts/` (`scripts/01_Data_Acquisition.py` … `05_Model.py`)
+- [x] Stage `.py` files moved to `stages/` (`stages/01_Data_Acquisition.py` … `05_Model.py`)
 - [x] Stage notebooks moved to `notebooks/` (`notebooks/01_Data_Acquisition.ipynb` … `05_Model.ipynb`)
 - [x] Stage names disambiguated: `01_Data_Processing` → `01_Data_Acquisition`, `03_Data_Processing` → `03_Modelling_Table` (scripts + notebooks + docs)
 - [x] `__pycache__/` removed (root + `src/`)
@@ -51,11 +54,11 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
 - [x] `src/models.py`: `predict_interval(h)` added to ARIMA + Prophet predictors
 - [x] `src/models.py`: optional `oracle_fc` argument added to ARIMAX, Prophet, RF,
       XGBoost and hybrid factories (replaces `features.forecast_exogenous`)
-- [x] `scripts/05_Model.py`: deleted the duplicated oracle predictors
+- [x] `stages/05_Model.py`: deleted the duplicated oracle predictors
       (`RFPredictorOracle`, `XGBPredictorOracle`, `HybridPredictorOracle`),
       `evaluate_oracle`, `patch_forecast`, `arima_predictor`, `fit_prophet_pi`,
       `prophet_fcst_with_pi`
-- [x] `scripts/05_Model.py`: PI + oracle sections rebuilt on `src.models` factories
+- [x] `stages/05_Model.py`: PI + oracle sections rebuilt on `src.models` factories
       (oracle run is now just `run_cv(name, partial(factory, oracle_fc=...))`)
 - [x] `src/models.py`: stepwise-selection docstring corrected to describe the
       constant-column short-circuit (statsmodels `ValueError` → keep full set;
@@ -72,7 +75,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
 
 - [x] Scripts location-independent: `sys.path` root resolves from `__file__` with a
       `Path.cwd()` fallback for notebooks, in all 5 scripts (+ the 4 patched notebooks)
-- [x] Headless-safe charting: stages 02/04/05 import `src.plotting` so `python scripts/*.py`
+- [x] Headless-safe charting: stages 02/04/05 import `src.plotting` so `python stages/*.py`
       works without a display (no more `TkAgg` crash); notebooks still render inline
 - [x] `src/cv.py`: warns when predictions fail on a fold instead of silently skipping
 - [x] `src/cv.py`: `expanding_windows`/`evaluate_baseline` take `initial_train_end`
@@ -85,10 +88,10 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
       test_year, error)` for every prediction that failed and was skipped (F-4);
       `run_cv` prints per-horizon skip warnings; `05` §5.10 asserts test-year
       symmetry across models per horizon
-- [x] `scripts/01_Data_Acquisition.py`: frozen-raw fallback (NFR-11) — if
+- [x] `stages/01_Data_Acquisition.py`: frozen-raw fallback (NFR-11) — if
       `data/raw/` already holds the file, reuse it (no network); a failed
       download raises a friendly `RuntimeError`; manifest timestamp from file stat
-- [x] `scripts/05_Model.py`: §5.11 "Practitioner decision guide" (FR-9) writes
+- [x] `stages/05_Model.py`: §5.11 "Practitioner decision guide" (FR-9) writes
       `data/outputs/decision_guide.md` from the verified result CSVs (best model,
       per-horizon best, DM significances, PI coverage, oracle ceiling); summary
       renumbered §5.12. `config.OUTPUT_FILES["decision_guide"]` added
@@ -102,29 +105,33 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
 - [x] `src/cv.py`: fold-level `assert_training_precedes_origin` +
       `assert_horizon_consistent` (NFR-1); `warn_on_swallowed_fits` replaces
       the inline warning with a quantified message (NFR-2 / F-4)
-- [x] `scripts/05_Model.py`: §5.10 verify uses `assert_balanced_test_sets`
+- [x] `stages/05_Model.py`: §5.10 verify uses `assert_balanced_test_sets`
       (NFR-2 / F-4) — raises instead of soft print
-- [x] `scripts/01_Data_Acquisition.py`: §1.4 spot-checks seasonal alignment
+- [x] `stages/01_Data_Acquisition.py`: §1.4 spot-checks seasonal alignment
       with `assert_alignment` (FR-3 / F-1) on a reference harvest year
 - [x] Notebook twins: `notebooks/01` and `03` re-synced from the renamed scripts
       via `jupytext --update` (outputs preserved); `05_Model.ipynb` regenerated
       from the refactored script — re-run 05 to repopulate outputs
 - [x] `src/weather.py` now listed in README + `config.py` docstring layout
-- [x] `scripts/03_Modelling_Table.py`: §3.4 validation now **raises** on failure
+- [x] `stages/03_Modelling_Table.py`: §3.4 validation now **raises** on failure
       (was print-only); `to_csv` deferred to after the `assert all(checks.values())`
       so a broken table never reaches downstream stages
-- [x] `scripts/05_Model.py`: PI loops (`compute_arima_pi`, `compute_prophet_pi`)
+- [x] `stages/05_Model.py`: PI loops (`compute_arima_pi`, `compute_prophet_pi`)
       now track `skipped` per model and emit `warn_on_swallowed_fits` (was silent
       `except: continue`); return `(DataFrame, skipped_count)` so callers can report
       the gap; `assert_balanced_test_sets` added on `pi_details` for PI protocol
       symmetry (NFR-2 / F-4)
-- [x] `scripts/05_Model.py`: Oracle ARIMA loop horizon range fixed from `[2,3,4]`
+- [x] `stages/05_Model.py`: Oracle ARIMA loop horizon range fixed from `[2,3,4]`
       to `[1,2,3,4]` — h=1 context rows were being dropped, making the oracle
       comparison table incomplete for ARIMA across all 4 horizons
-- [x] `scripts/01_Data_Acquisition.py`: `payload` `UnboundLocalError` on fresh
+- [x] `stages/01_Data_Acquisition.py`: `payload` `UnboundLocalError` on fresh
       downloads fixed (was only bound inside the retry loop; now initialised
       before); winter seasonal alignment guard (`assert_alignment_spanning_year`)
       added spot-check; duplicate seasonal spot-check print removed
+- [x] `main.py`: converted from `subprocess.call` to `importlib`-based
+      import-and-call; each stage script now exposes `main()` (Entry-point
+      discipline — see §0), stages are composable units, error handling
+      distinguishes AssertionError from other exceptions
 
 ## 5. Tests (DONE)
 
@@ -140,7 +147,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
 
 ## 6. Docs (DONE)
 
-- [x] `config.py` docstring directory layout updated (scripts/, notebooks/, `src/weather.py`)
+- [x] `config.py` docstring directory layout updated (stages/, notebooks/, `src/weather.py`)
 - [x] `README.md`: tree shows `src/weather.py`, `tests/`, `PLAYBOOK.md`,
       `requirements-dev.txt`, `pyproject.toml`, `REQUIREMENTS.md`; "Dependencies" +
       "Tests" sections added; "invoke from pipeline root" note removed
@@ -200,7 +207,6 @@ Dev-only (`requirements-dev.txt` / `[project.optional-dependencies] dev`):
 
 ```bash
 python -m pytest tests/ -q            # unit tests (43 pass)
-python scripts/02_EDA.py              # fast smoke: reads modelling table
-python scripts/04_Feature_Engineering.py
-python scripts/05_Model.py            # full run: 30–70 min, ends with ALL CHECKS PASSED
+python main.py --stage 04             # run stages 01–04 via import (no subprocess)
+python stages/05_Model.py            # stage 05: 30–70 min, ends with ALL CHECKS PASSED
 ```

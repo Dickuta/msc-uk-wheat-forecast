@@ -19,15 +19,15 @@ the entire contribution is *an honest, standardised evaluation framework*.
 
 | ID | Requirement | Enforcement | Status |
 |---|---|---|---|
-| FR-1 | Acquire raw public data reproducibly, with provenance (URL, checksum, date) | `scripts/01` download + `manifest.csv` (`01_Data_Acquisition.py:163-183`) | enforced |
+| FR-1 | Acquire raw public data reproducibly, with provenance (URL, checksum, date) | `stages/01` download + `manifest.csv` (`01_Data_Acquisition.py:163-183`) | enforced |
 | FR-2 | One canonical modelling table; sole input to every downstream stage | `03` writes it; 02/04/05 read only `uk_wheat_modelling_table_1980_2024.csv` | enforced |
 | FR-3 | Weather→phenological-window alignment in one shared function | `aggregate_seasonal` (`src/weather.py`); runtime spot-check `assert_alignment` (`01_Data_Acquisition.py:242-268`) | enforced |
 | FR-4 | One evaluation protocol: expanding window, horizons 1–4, paired RMSE/MAE | `ExpandingWindowCV` (`src/cv.py`), config-driven | enforced |
 | FR-5 | Statistical comparison (Diebold–Mariano, multi-step correction) | `diebold_mariano` (`src/metrics.py:78-83`) | enforced |
-| FR-6 | Uncertainty: PI coverage vs nominal | §5.7 of `scripts/05_Model.py`; verified in §5.10 | enforced |
-| FR-7 | Bound the ceiling: oracle (perfect weather foresight) | §5.9 of `scripts/05_Model.py`, `oracle_fc` factories | enforced |
+| FR-6 | Uncertainty: PI coverage vs nominal | §5.7 of `stages/05_Model.py`; verified in §5.10 | enforced |
+| FR-7 | Bound the ceiling: oracle (perfect weather foresight) | §5.9 of `stages/05_Model.py`, `oracle_fc` factories | enforced |
 | FR-8 | Self-verify against canonical expected values, fail loudly | `verify()` (`05_Model.py:613-689`) | enforced |
-| FR-9 | Practitioner decision guide, traceable to the numbers | §5.11 of `scripts/05_Model.py` → `data/outputs/decision_guide.md` | enforced |
+| FR-9 | Practitioner decision guide, traceable to the numbers | §5.11 of `stages/05_Model.py` → `data/outputs/decision_guide.md` | enforced |
 
 ## Non-functional requirements
 
@@ -63,7 +63,7 @@ data only would change every ML result and require regenerating
 `assert_horizon_consistent` are called at every CV fold (`src/cv.py:118-119`);
 `warn_on_swallowed_fits` warns when folds are dropped (`src/cv.py:172`);
 `assert_balanced_test_sets` raises if any model sees a different test set
-(`scripts/05_Model.py:656`). These catch structural leakage but do not undo
+(`stages/05_Model.py:656`). These catch structural leakage but do not undo
 the disclosed ML tuning asymmetry.
 
 ## Failure modes we've seen (and their mitigations)

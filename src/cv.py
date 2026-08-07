@@ -16,13 +16,17 @@ Also contains the two trivial baselines: Climatology (training-window mean)
 and Naive_RandomWalk (last observed yield).
 """
 
+from __future__ import annotations
+
 import time
 import tracemalloc
 import warnings
 from dataclasses import dataclass, field
+from typing import Callable, Optional, Protocol, Tuple, Any
 
 import numpy as np
 import pandas as pd
+from numpy.typing import ArrayLike
 
 from .metrics import mae, rmse
 from .guards import (
@@ -30,6 +34,18 @@ from .guards import (
     assert_horizon_consistent,
     warn_on_swallowed_fits,
 )
+
+
+class Predictor(Protocol):
+    """Protocol for any predictor object with a predict method."""
+
+    def predict(self, horizon: int) -> float: ...
+
+
+class ModelFactory(Protocol):
+    """Protocol for model factory: (train_df, horizon) -> predictor."""
+
+    def __call__(self, train_df: pd.DataFrame, horizon: int) -> Predictor: ...
 
 
 @dataclass
@@ -57,14 +73,14 @@ class ExpandingWindowCV:
     """
 
     data: pd.DataFrame
-    model_factory: object
-    model_name: str = None
-    horizons: list = field(default_factory=lambda: [1, 2, 3, 4])
+    model_factory: ModelFactory
+    model_name: Optional[str] = None
+    horizons: list[int] = field(default_factory=lambda: [1, 2, 3, 4])
     initial_train_end: int = 2000
     seed: int = 42
     standardise: bool = False
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.data = self.data.sort_values("year").reset_index(drop=True)
         self.covariate_cols = [
             c for c in self.data.columns if c not in ("year", "yield_t_ha")
@@ -72,10 +88,12 @@ class ExpandingWindowCV:
         self.model_name = self.model_name or getattr(
             self.model_factory, "__name__", type(self.model_factory).__name__
         )
-        self.results = []
-        self.skipped_folds = []
+        self.results: list[dict[str, Any]] = []
+        self.skipped_folds: list[dict[str, Any]] = []
 
-    def _get_train_test(self, train_end_year, horizon):
+    def _get_train_test(
+        self, train_end_year: int, horizon: int
+    ) -> Tuple[Optional[pd.DataFrame], Optional[pd.Series], Optional[int]]:
         train_mask = self.data["year"] <= train_end_year
         test_year = train_end_year + horizon
         if test_year > self.data["year"].max():
@@ -87,7 +105,9 @@ class ExpandingWindowCV:
             return None, None, None
         return train_df, test_row.iloc[0], test_year
 
-    def _standardise_train_test(self, train_df, test_row):
+    def _standardise_train_test(
+        self, train_df: pd.DataFrame, test_row: pd.Series
+    ) -> Tuple[pd.DataFrame, pd.Series]:
         from sklearn.preprocessing import StandardScaler
 
         scaler = StandardScaler()
@@ -101,14 +121,14 @@ class ExpandingWindowCV:
         )
         return train_scaled, test_scaled
 
-    def evaluate(self):
+    def evaluate(self) -> pd.DataFrame:
         """Run the CV for every horizon and return a per-horizon summary."""
         np.random.seed(self.seed)
-        model_cache = {}
+        model_cache: dict[int, Predictor] = {}
         skipped = 0
         attempted = 0
         for horizon in self.horizons:
-            predictions = []
+            predictions: list[dict[str, Any]] = []
             for train_end in range(
                 self.initial_train_end, int(self.data["year"].max())
             ):
@@ -172,7 +192,7 @@ class ExpandingWindowCV:
         warn_on_swallowed_fits(attempted, attempted - skipped, self.model_name)
         return self.summarise()
 
-    def summarise(self):
+    def summarise(self) -> pd.DataFrame:
         """Aggregate the per-fold predictions into per-horizon metrics."""
         if not self.results:
             return pd.DataFrame()
@@ -201,7 +221,7 @@ class ExpandingWindowCV:
 # --------------------------------------------------------------------------- #
 # Baselines
 # --------------------------------------------------------------------------- #
-def expanding_windows(df, horizon, initial_train_end=2000):
+def expanding_windows(df: pd.DataFrame, horizon: int, initial_train_end: int = 2000):
     """Yield (train, test_year) pairs under the same expanding-window protocol."""
     max_origin = int(df["year"].max()) - horizon
     for origin in range(initial_train_end, max_origin + 1):
@@ -210,9 +230,15 @@ def expanding_windows(df, horizon, initial_train_end=2000):
         yield train, int(test_year)
 
 
-def evaluate_baseline(df, horizon, predictor, initial_train_end=2000):
+def evaluate_baseline(
+    df: pd.DataFrame,
+    horizon: int,
+    predictor: Callable[[pd.DataFrame], float],
+    initial_train_end: int = 2000,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Return (y_true, y_pred) arrays for a baseline predictor on a horizon."""
-    y_true, y_pred = [], []
+    y_true: list[float] = []
+    y_pred: list[float] = []
     for train, test_year in expanding_windows(df, horizon, initial_train_end):
         y_true.append(df[df["year"] == test_year]["yield_t_ha"].iloc[0])
         y_pred.append(predictor(train))

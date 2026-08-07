@@ -20,7 +20,7 @@ uk_wheat_pipeline/
 │   ├── features.py           # exogenous forecasting (ARIMA 1,0,0)
 │   ├── weather.py            # seasonal phenological-window aggregation
 │   └── plotting.py           # chart style (all charts render inline)
-├── scripts/                  # the five stages as runnable .py files
+├── stages/                  # the five stages as runnable .py files
 │   ├── 01_Data_Acquisition.py       # acquire raw data from public sources
 │   ├── 02_EDA.py                    # exploratory data analysis
 │   ├── 03_Modelling_Table.py        # assemble the modelling table
@@ -47,11 +47,11 @@ Run the notebooks in order (or their `.py` twins inside VSCode). The scripts
 resolve the pipeline root themselves, so they work from any directory:
 
 ```bash
-python scripts/01_Data_Acquisition.py   # or open notebooks/01_Data_Acquisition.ipynb
-python scripts/02_EDA.py
-python scripts/03_Modelling_Table.py
-python scripts/04_Feature_Engineering.py
-python scripts/05_Model.py              # heavy: ~30–70 min on CPU
+python stages/01_Data_Acquisition.py   # or open notebooks/01_Data_Acquisition.ipynb
+python stages/02_EDA.py
+python stages/03_Modelling_Table.py
+python stages/04_Feature_Engineering.py
+python stages/05_Model.py              # heavy: ~30–70 min on CPU
 ```
 
 Stage 05 ends with an automatic **verification** that every produced number
@@ -118,7 +118,7 @@ reproduced.
   UK-mean series. Stage 03 keeps the canonical table as ground truth and
   *quantifies* the difference so the provenance stays transparent.
 * **`data/expected/` was regenerated from the corrected pipeline.** On
-  2026-08-06 the verification target was rebuilt from `scripts/05_Model.py`
+  2026-08-06 the verification target was rebuilt from `stages/05_Model.py`
   because the refactor fixed the thesis's ARIMAX p-value-selection bug (the
   thesis read a positional `pvalues[-n_exog:]` slice; the corrected code reads
   p-values by name). ARIMAX RMSE/MAE move by ≈0.006/0.009 t/ha. The original

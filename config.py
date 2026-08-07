@@ -12,7 +12,7 @@ Directory layout
 uk_wheat_pipeline/
     config.py               central configuration (this file)
     src/                    shared code (metrics, features, models, cv, weather)
-    scripts/                01_Data_Acquisition .. 05_Model  (.py, VSCode cells)
+    stages/                01_Data_Acquisition .. 05_Model  (.py, VSCode cells)
     notebooks/              01_Data_Acquisition .. 05_Model  (.ipynb, executed)
     data/
         raw/                files downloaded from public data sources
@@ -103,6 +103,21 @@ COVARIATE_COLS = [
 ]
 
 # --------------------------------------------------------------------------- #
+# Weather column rename map (canonical names -> pipeline names)
+# --------------------------------------------------------------------------- #
+WEATHER_RENAME = {
+    "autumn_tas": "autumn_temp",
+    "winter_tas": "winter_temp",
+    "spring_tas": "spring_temp",
+    "grainfill_tas": "grainfill_temp",
+    "autumn_rainfall": "autumn_rain",
+    "winter_rainfall": "winter_rain",
+    "spring_rainfall": "spring_rain",
+    "grainfill_rainfall": "grainfill_rain",
+}
+
+
+# --------------------------------------------------------------------------- #
 # Model hyperparameters (identical to the corrected Colab pipeline)
 # --------------------------------------------------------------------------- #
 ARIMA_P_Q_RANGE = range(0, 4)  # ARIMA order search: p, q in 0..3, d=0
@@ -129,6 +144,66 @@ XGB_GRID = {
     "subsample": [0.8, 1.0],
     "colsample": [0.8, 1.0],
 }
+
+# --------------------------------------------------------------------------- #
+# Model registry (single source of truth for model list & factory mapping)
+# --------------------------------------------------------------------------- #
+from typing import Callable, Dict, Any
+from src.models import (
+    persistence_factory,
+    arima_factory,
+    sarima_factory,
+    arimax_factory,
+    prophet_factory,
+    make_rf_factory,
+    make_xgb_factory,
+    make_hybrid_factory,
+)
+
+# Order matters: used for plotting, DM tests, decision guide
+MODEL_ORDER = [
+    "Persistence",
+    "ARIMA",
+    "SARIMA",
+    "ARIMAX",
+    "Prophet",
+    "RandomForest",
+    "XGBoost",
+    "ARIMA+XGBoost",
+]
+
+# Model families for grouped iteration
+STATISTICAL_MODELS = ["Persistence", "ARIMA", "SARIMA", "ARIMAX", "Prophet"]
+ML_MODELS = ["RandomForest", "XGBoost", "ARIMA+XGBoost"]
+
+# Factory mapping: model_name -> factory function (or maker that returns factory)
+# For ML models, the value is a callable that takes tuned params and returns a factory
+MODEL_FACTORIES: Dict[str, Any] = {
+    "Persistence": persistence_factory,
+    "ARIMA": arima_factory,
+    "SARIMA": sarima_factory,
+    "ARIMAX": arimax_factory,
+    "Prophet": prophet_factory,
+    "RandomForest": make_rf_factory,
+    "XGBoost": make_xgb_factory,
+    "ARIMA+XGBoost": make_hybrid_factory,
+}
+
+# Which models need exogenous covariates forecast
+EXOG_MODELS = {"ARIMAX", "Prophet", "RandomForest", "XGBoost", "ARIMA+XGBoost"}
+
+# Bar colours for plotting (aligned with MODEL_ORDER)
+BAR_COLOURS = [
+    "#7f7f7f",  # Persistence
+    "#1f77b4",  # ARIMA
+    "#2ca02c",  # SARIMA
+    "#9467bd",  # ARIMAX
+    "#ff7f0e",  # Prophet
+    "#8c564b",  # RandomForest
+    "#e377c2",  # XGBoost
+    "#d62728",  # ARIMA+XGBoost
+]
+
 
 # --------------------------------------------------------------------------- #
 # Output files written by the pipeline

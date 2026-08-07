@@ -8,25 +8,34 @@ it uses the Harvey-Leybourne-Newbold (HLN) small-sample correction and a
 one-sided... two-sided Student-t approximation for the p-value.
 """
 
+from __future__ import annotations
+
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy import stats
 
 
-def rmse(y_true, y_pred):
+def rmse(y_true: ArrayLike, y_pred: ArrayLike) -> float:
     """Root mean squared error."""
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
 
 
-def mae(y_true, y_pred):
+def mae(y_true: ArrayLike, y_pred: ArrayLike) -> float:
     """Mean absolute error."""
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     return float(np.mean(np.abs(y_true - y_pred)))
 
 
-def diebold_mariano(y_true, y_pred1, y_pred2, loss="MSE", h=1):
+def diebold_mariano(
+    y_true: ArrayLike,
+    y_pred1: ArrayLike,
+    y_pred2: ArrayLike,
+    loss: str = "MSE",
+    h: int = 1,
+) -> tuple[float, float]:
     """Diebold-Mariano test between two forecast series.
 
     Parameters
