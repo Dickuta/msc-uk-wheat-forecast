@@ -60,9 +60,9 @@ full expanding-window CV across 8 models).
 ## Dependencies
 
 `requirements.txt` pins the exact runtime versions used to produce the thesis
-numbers (including `numpy==2.3.5`, the last release that avoids the Colab
-`_center`/`_blas_supports_fpe` import crash). The same pins are mirrored in
-`pyproject.toml` (`pip install -e .` installs them).
+numbers (pinned to the exact versions that produced the canonical
+`data/expected/` results, including `numpy==2.5.1`). The same pins are mirrored
+in `pyproject.toml` (`pip install -e .` installs them).
 
 ## Data provenance (nothing is hard-coded)
 
