@@ -5,10 +5,8 @@ __pycache__/
 # Notebook checkpoints
 .ipynb_checkpoints/
 
-# Pipeline-generated data (reproducible from scripts/01 and config)
-data/raw/
-data/processed/
-data/outputs/
+# Data is committed (small, ~360K) so the repo is self-contained on Colab.
+# data/raw/ holds the frozen source files that let the pipeline run offline.
 
 # Local test / tooling caches
 .pytest_cache/

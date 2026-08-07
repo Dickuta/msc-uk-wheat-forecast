@@ -1,0 +1,3 @@
+variable,source,url,raw_file,parsed_file,downloaded_at_utc,sha256,n_monthly_rows,status
+tas,UK-mean monthly temperature (degC),https://www.metoffice.gov.uk/pub/data/weather/uk/climate/datasets/Tmean/date/UK.txt,met_office_Tmean_UK.txt,met_office_tas_monthly.csv,2026-08-06 08:22:38,00dfc31ce685baf1408c45d14721abae074c95c8165188b09937193396c7c645,1704,OK
+rainfall,UK-mean monthly rainfall (mm),https://www.metoffice.gov.uk/pub/data/weather/uk/climate/datasets/Rainfall/date/UK.txt,met_office_Rainfall_UK.txt,met_office_rainfall_monthly.csv,2026-08-06 08:22:38,d6ca182002029098fbbe60f0c57a9a3de9eb78640d7451eadd0097d3867b5d9f,2280,OK
