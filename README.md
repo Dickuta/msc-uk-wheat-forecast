@@ -9,6 +9,7 @@ inline.
 ```
 uk_wheat_pipeline/
 ├── config.py                 # every path, URL, seed and hyperparameter
+├── 00_Colab_Setup.ipynb      # one-click Google Colab runner (clone + run all 5)
 ├── requirements.txt          # pinned runtime dependencies (see §dependencies)
 ├── requirements-dev.txt      # test + notebook tooling
 ├── pyproject.toml            # project metadata + pytest config
@@ -33,8 +34,8 @@ uk_wheat_pipeline/
 │   ├── 04_Feature_Engineering.ipynb
 │   └── 05_Model.ipynb
 ├── tests/                    # fast unit tests (pytest)
-└── data/
-    ├── raw/                  # downloaded by 01 (Met Office series + manifest)
+└── data/                     # committed (≈360K) so the repo runs offline on Colab
+    ├── raw/                  # frozen Met Office series + manifest (stage 01 reuses them)
     ├── processed/            # modelling table (the single downstream input)
     ├── expected/             # canonical outputs the pipeline verifies against
     ├── thesis_reference/     # archived original thesis numbers (viva trail)
@@ -60,6 +61,27 @@ matches the canonical thesis values in `data/expected/`.
 Each notebook is executed end-to-end, so every chart renders inline in the
 `.ipynb` (charts are never saved as image files).
 
+## Run on Google Colab
+
+The whole pipeline runs in Google Colab with a single notebook:
+
+> [Open `00_Colab_Setup.ipynb` in Colab](https://colab.research.google.com/github/Dickuta/msc-uk-wheat-forecast/blob/master/00_Colab_Setup.ipynb)
+
+From the Colab menu choose **Runtime → Run all**. It clones this repository,
+installs the pinned `requirements.txt` dependencies, then executes the five
+stage notebooks in order (`notebooks/01` → `notebooks/05`). Everything the
+pipeline needs — including the frozen raw Met Office files in `data/raw/` — is
+committed to the repo, so **no network downloads are required** once cloned;
+stage 01 detects the frozen copies and skips the download. The final cell zips
+the executed notebooks and result CSVs for download.
+
+Expect roughly 10–20 minutes on a standard Colab CPU runtime (stage 05 runs the
+full expanding-window CV across 8 models). You can also open any individual
+stage notebook directly in Colab and run it in isolation, e.g.:
+
+* [`notebooks/01_Data_Acquisition.ipynb`](https://colab.research.google.com/github/Dickuta/msc-uk-wheat-forecast/blob/master/notebooks/01_Data_Acquisition.ipynb)
+* [`notebooks/05_Model.ipynb`](https://colab.research.google.com/github/Dickuta/msc-uk-wheat-forecast/blob/master/notebooks/05_Model.ipynb)
+
 ## Dependencies
 
 `requirements.txt` pins the exact runtime versions used to produce the thesis
@@ -79,7 +101,7 @@ python -m pytest tests/ -q
 
 | Stage | Reads from | Writes to |
 |---|---|---|
-| 01 | public sources (Met Office UK Climate Series) | `data/raw/` + `manifest.csv` |
+| 01 | public sources (Met Office UK Climate Series), or frozen copies in `data/raw/` | `data/raw/` + `manifest.csv` |
 | 02 | `data/raw/` + canonical building blocks | the modelling table |
 | 03 | modelling table | inline charts only |
 | 04 | modelling table | nothing (demonstrates feature construction) |
