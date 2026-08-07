@@ -1,101 +1,68 @@
 # UK Wheat Yield Forecasting — Reproducible Pipeline
 
 A modular, documented pipeline for the UK wheat yield forecasting study.
-It reimplements the *corrected* Colab pipeline as five clean stages, each
-available **both** as a Python file (VSCode-native, `# %%` cells) **and** as
-an executed Jupyter notebook (`.ipynb`) with figures and tables rendered
-inline.
+It reimplements the *corrected* Colab pipeline as five clean stages, all of
+which run end-to-end from a **single consolidated notebook**
+(`uk_wheat_pipeline_full.ipynb`) — in Colab or locally. The working copies of
+the notebooks, stage scripts, tests and notes live outside the repo (in
+`dont_track/`) and are intentionally not tracked by git.
 
 ```
 uk_wheat_pipeline/
-├── config.py                 # every path, URL, seed and hyperparameter
-├── 00_Colab_Setup.ipynb      # one-click Google Colab runner (clone + run all 5)
-├── requirements.txt          # pinned runtime dependencies (see §dependencies)
-├── requirements-dev.txt      # test + notebook tooling
-├── pyproject.toml            # project metadata + pytest config
-├── PLAYBOOK.md               # live maintenance checklist
-├── src/                      # shared, documented code
-│   ├── metrics.py            # RMSE, MAE, Diebold–Mariano (HLN-corrected)
-│   ├── cv.py                 # expanding-window CV + baselines
-│   ├── models.py             # 8 model factories + ML tuning + predict_interval/oracle hooks
-│   ├── features.py           # exogenous forecasting (ARIMA 1,0,0)
-│   ├── weather.py            # seasonal phenological-window aggregation
-│   └── plotting.py           # chart style (all charts render inline)
-├── stages/                  # the five stages as runnable .py files
-│   ├── 01_Data_Acquisition.py       # acquire raw data from public sources
-│   ├── 02_Modelling_Table.py        # assemble the modelling table
-│   ├── 03_EDA.py                    # exploratory data analysis
-│   ├── 04_Feature_Engineering.py    # model-ready features
-│   └── 05_Model.py                  # comparison, DM, PIs, oracle, verify
-├── notebooks/                # the same five stages as executed .ipynb
-│   ├── 01_Data_Acquisition.ipynb
-│   ├── 02_Modelling_Table.ipynb
-│   ├── 03_EDA.ipynb
-│   ├── 04_Feature_Engineering.ipynb
-│   └── 05_Model.ipynb
-├── tests/                    # fast unit tests (pytest)
-└── data/                     # committed (≈360K) so the repo runs offline on Colab
-    ├── raw/                  # frozen Met Office series + manifest (stage 01 reuses them)
-    ├── processed/            # modelling table (the single downstream input)
-    ├── expected/             # canonical outputs the pipeline verifies against
-    ├── thesis_reference/     # archived original thesis numbers (viva trail)
-    └── outputs/              # result CSVs + decision guide (charts inline)
+├── uk_wheat_pipeline_full.ipynb  # single Colab notebook: setup + stages 01–05
+├── config.py                     # every path, URL, seed and hyperparameter
+├── requirements.txt              # pinned runtime dependencies (see §dependencies)
+├── pyproject.toml                # project metadata
+├── src/                          # shared, documented code
+│   ├── metrics.py                # RMSE, MAE, Diebold–Mariano (HLN-corrected)
+│   ├── cv.py                     # expanding-window CV + baselines
+│   ├── models.py                 # 8 model factories + ML tuning + predict_interval/oracle hooks
+│   ├── features.py               # exogenous forecasting (ARIMA 1,0,0)
+│   ├── weather.py                # seasonal phenological-window aggregation
+│   └── plotting.py               # chart style (all charts render inline)
+└── data/                         # committed (≈360K) so the repo runs offline on Colab
+    ├── raw/                      # frozen Met Office series + manifest (stage 01 reuses them)
+    ├── processed/                # modelling table (the single downstream input)
+    ├── expected/                 # canonical outputs the pipeline verifies against
+    ├── thesis_reference/         # archived original thesis numbers (viva trail)
+    └── outputs/                  # result CSVs + decision guide (charts inline)
 ```
 
 ## How to run
 
-Run the notebooks in order (or their `.py` twins inside VSCode). The scripts
-resolve the pipeline root themselves, so they work from any directory:
-
-```bash
-python stages/01_Data_Acquisition.py   # or open notebooks/01_Data_Acquisition.ipynb
-python stages/02_Modelling_Table.py
-python stages/03_EDA.py
-python stages/04_Feature_Engineering.py
-python stages/05_Model.py              # heavy: ~30–70 min on CPU
-```
+Open `uk_wheat_pipeline_full.ipynb` and run it end-to-end (in Colab or with
+Jupyter/VSCode). The notebook clones this repository, installs the pinned
+`requirements.txt` dependencies, and executes stages 01 → 05 in order:
+data acquisition, modelling table, EDA, feature engineering, and the model
+comparison (CV, DM tests, prediction intervals, oracle experiment, and final
+verification). The pipeline resolves its own root directory, so it works from
+any location.
 
 Stage 05 ends with an automatic **verification** that every produced number
 matches the canonical thesis values in `data/expected/`.
-
-Each notebook is executed end-to-end, so every chart renders inline in the
-`.ipynb` (charts are never saved as image files).
 
 ## Run on Google Colab
 
 The whole pipeline runs in Google Colab with a single notebook:
 
-> [Open `00_Colab_Setup.ipynb` in Colab](https://colab.research.google.com/github/Dickuta/msc-uk-wheat-forecast/blob/master/00_Colab_Setup.ipynb)
+> [Open `uk_wheat_pipeline_full.ipynb` in Colab](https://colab.research.google.com/github/Dickuta/msc-uk-wheat-forecast/blob/master/uk_wheat_pipeline_full.ipynb)
 
 From the Colab menu choose **Runtime → Run all**. It clones this repository,
-installs the pinned `requirements.txt` dependencies, then executes the five
-stage notebooks in order (`notebooks/01` → `notebooks/05`). Everything the
-pipeline needs — including the frozen raw Met Office files in `data/raw/` — is
-committed to the repo, so **no network downloads are required** once cloned;
-stage 01 detects the frozen copies and skips the download. The final cell zips
-the executed notebooks and result CSVs for download.
+installs the pinned `requirements.txt` dependencies (auto-restarting the
+runtime once so numpy loads cleanly), then executes the five stages in order.
+Everything the pipeline needs — including the frozen raw Met Office files in
+`data/raw/` — is committed to the repo, so **no network downloads are required**
+once cloned; stage 01 detects the frozen copies and skips the download.
 
 Expect roughly 10–20 minutes on a standard Colab CPU runtime (stage 05 runs the
-full expanding-window CV across 8 models). You can also open any individual
-stage notebook directly in Colab and run it in isolation, e.g.:
-
-* [`notebooks/01_Data_Acquisition.ipynb`](https://colab.research.google.com/github/Dickuta/msc-uk-wheat-forecast/blob/master/notebooks/01_Data_Acquisition.ipynb)
-* [`notebooks/05_Model.ipynb`](https://colab.research.google.com/github/Dickuta/msc-uk-wheat-forecast/blob/master/notebooks/05_Model.ipynb)
+full expanding-window CV across 8 models).
 
 ## Dependencies
 
 `requirements.txt` pins the exact runtime versions used to produce the thesis
-numbers; `requirements-dev.txt` adds `pytest` and the notebook-tooling
-(`jupytext`, `nbconvert`, `nbformat`) used to keep the `.py`/`.ipynb` twins in
-sync. The same pins are mirrored in `pyproject.toml` (`pip install -e ".[dev]"`
-installs both).
-
-## Tests
-
-```bash
-python -m pytest tests/ -q
-```
-
+numbers (including `numpy==2.3.5`, the last release that avoids the Colab
+`_center`/`_blas_supports_fpe` import crash). The same pins are mirrored in
+`pyproject.toml` (`pip install -e .` installs them).
 
 ## Data provenance (nothing is hard-coded)
 
@@ -140,7 +107,7 @@ reproduced.
   UK-mean series. Stage 02 keeps the canonical table as ground truth and
   *quantifies* the difference so the provenance stays transparent.
 * **`data/expected/` was regenerated from the corrected pipeline.** On
-  2026-08-06 the verification target was rebuilt from `stages/05_Model.py`
+  2026-08-06 the verification target was rebuilt from the corrected stage 05
   because the refactor fixed the thesis's ARIMAX p-value-selection bug (the
   thesis read a positional `pvalues[-n_exog:]` slice; the corrected code reads
   p-values by name). ARIMAX RMSE/MAE move by ≈0.006/0.009 t/ha. The original

@@ -16,6 +16,9 @@ __pycache__/
 # Anaconda notebook server workspace (local-only)
 anaconda_projects/
 
+# Local-only workspace: notebooks, stages, tests, notes kept off the repo
+dont_track/
+
 # Transient run logs
 *.log
 

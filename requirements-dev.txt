@@ -1,5 +1,0 @@
-# Tooling for tests and for keeping the .py/.ipynb twins in sync.
-pytest==9.1.1
-jupytext==1.19.3
-nbconvert==7.16.6
-nbformat==5.10.4
