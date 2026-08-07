@@ -18,8 +18,8 @@ from pathlib import Path
 
 STAGES = [
     ("01", "stages/01_Data_Acquisition.py", "Acquire raw Met Office data"),
-    ("02", "stages/02_EDA.py", "Exploratory data analysis"),
-    ("03", "stages/03_Modelling_Table.py", "Build the modelling table"),
+    ("02", "stages/02_Modelling_Table.py", "Build the modelling table"),
+    ("03", "stages/03_EDA.py", "Exploratory data analysis"),
     ("04", "stages/04_Feature_Engineering.py", "Feature engineering"),
     ("05", "stages/05_Model.py", "Model comparison, DM tests, PIs, oracle, verify"),
 ]

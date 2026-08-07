@@ -113,7 +113,7 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done
       via `jupytext --update` (outputs preserved); `05_Model.ipynb` regenerated
       from the refactored script — re-run 05 to repopulate outputs
 - [x] `src/weather.py` now listed in README + `config.py` docstring layout
-- [x] `stages/03_Modelling_Table.py`: §3.4 validation now **raises** on failure
+- [x] `stages/02_Modelling_Table.py`: §2.4 validation now **raises** on failure
       (was print-only); `to_csv` deferred to after the `assert all(checks.values())`
       so a broken table never reaches downstream stages
 - [x] `stages/05_Model.py`: PI loops (`compute_arima_pi`, `compute_prophet_pi`)

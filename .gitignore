@@ -15,6 +15,9 @@ data/outputs/
 .ruff_cache/
 *.egg-info/
 
+# Anaconda notebook server workspace (local-only)
+anaconda_projects/
+
 # Transient run logs
 *.log
 

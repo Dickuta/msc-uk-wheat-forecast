@@ -2,7 +2,7 @@
 # jupyter:
 #   jupytext:
 #     cell_metadata_filter: -all
-#     formats: py:percent,../notebooks//ipynb
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
@@ -11,13 +11,13 @@
 # ---
 
 # %% [markdown]
-# # 03 · Modelling Table — assemble the modelling table
+# # 02 · Modelling Table — assemble the modelling table
 #
 # **Goal.** Combine the three building blocks — yield, weather and policy
 # dummies — into the single **modelling table** used by every downstream stage
 # (EDA, feature engineering, modelling). The table is written to
 # `data/processed/uk_wheat_modelling_table_1980_2024.csv` and is the **only**
-# data source stages 02, 04 and 05 read.
+# data source stages 03, 04 and 05 read.
 #
 # | Building block | File | Provenance |
 # |---|---|---|
@@ -35,27 +35,24 @@
 # then quantifies how far the UK-mean reconstruction would diverge.
 
 # %% [markdown]
-# ## 3.1 Setup
+# ## 2.1 Setup
 
 # %%
-from src._bootstrap import init_script, common_imports
-from src.logging_utils import (
-    get_stage_logger,
-    log_stage_start,
-    log_stage_end,
-    timed_block,
-    log_artifact,
+import sys
+from pathlib import Path
+
+sys.path.insert(
+    0, str(Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd())
 )
+
+from src._bootstrap import init_script, common_imports
 
 c = common_imports()
 display = init_script(float_format=lambda v: f"{v:,.3f}")
 
-log = get_stage_logger(__name__, "03")
-log_stage_start(log, "03", "Modelling Table - assemble yield, weather, policy dummies")
-
 
 # %% [markdown]
-# ## 3.2 Load the building blocks
+# ## 2.2 Load the building blocks
 
 
 # %%
@@ -85,7 +82,7 @@ def load_inputs():
 
 
 # %% [markdown]
-# ## 3.3 Merge into the modelling table
+# ## 2.3 Merge into the modelling table
 #
 # All three inputs are keyed on `year` and joined with an inner merge. The
 # canonical weather columns are renamed to the short names used across the
@@ -104,7 +101,7 @@ def merge_table(yield_df, weather_df, policy_df):
 
 
 # %% [markdown]
-# ## 3.4 Validation
+# ## 2.4 Validation
 #
 # A good modelling table must be complete, correctly typed and temporally
 # contiguous. The checks below fail loudly if anything is off — and a failing
@@ -134,7 +131,7 @@ def validate(modelling):
 
 
 # %% [markdown]
-# ## 3.5 Reproducibility check — canonical vs UK-mean weather
+# ## 2.5 Reproducibility check — canonical vs UK-mean weather
 #
 # To make the provenance gap explicit, we rebuild the UK-mean seasonal weather
 # (from stage 01) and compare it, season by season, with the canonical values.
@@ -210,34 +207,22 @@ def compare_weather(modelling):
 # UK-mean path remains fully scriptable above, so the whole chain *from raw
 # download to modelling table* is transparent and repeatable.
 #
-# ## 3.6 Summary
+# ## 2.6 Summary
 
 
 # %%
 def main():
-    """Run the full stage 03: load, merge, validate, persist, compare."""
-    with timed_block(log, "load_inputs"):
-        yield_df, weather_df, policy_df = load_inputs()
+    """Run the full stage 02: load, merge, validate, persist, compare."""
+    yield_df, weather_df, policy_df = load_inputs()
 
-    with timed_block(log, "merge_table"):
-        modelling = merge_table(yield_df, weather_df, policy_df)
+    modelling = merge_table(yield_df, weather_df, policy_df)
 
-    with timed_block(log, "validate"):
-        validate(modelling)
+    validate(modelling)
 
     # Only persist after validation passes
-    with timed_block(log, "write_modelling_table", path=str(c.config.MODEL_TABLE_FILE)):
-        modelling.to_csv(c.config.MODEL_TABLE_FILE, index=False)
-
-    log_artifact(log, c.config.MODEL_TABLE_FILE, "modelling table")
-    log.info(
-        "Modelling table written",
-        extra={
-            "stage": "03",
-            "rows": modelling.shape[0],
-            "cols": modelling.shape[1],
-            "path": str(c.config.MODEL_TABLE_FILE),
-        },
+    modelling.to_csv(c.config.MODEL_TABLE_FILE, index=False)
+    print(
+        f"Modelling table written: {modelling.shape[0]} rows x {modelling.shape[1]} cols -> {c.config.MODEL_TABLE_FILE.name}"
     )
 
     print("\nSummary statistics of the modelling table:")
@@ -246,10 +231,14 @@ def main():
     print("Missing values by column:")
     display(modelling.isna().sum())
 
-    with timed_block(log, "compare_weather"):
-        compare_weather(modelling)
+    compare_weather(modelling)
 
-    log_stage_end(log, "03", success=True)
+    print("\nFinal modelling table written to:", c.config.MODEL_TABLE_FILE)
+    print(
+        f"  {modelling.shape[0]} rows x {modelling.shape[1]} cols, "
+        f"years {modelling['year'].min()}-{modelling['year'].max()}"
+    )
+    print("Columns:", list(modelling.columns))
 
 
 # %%

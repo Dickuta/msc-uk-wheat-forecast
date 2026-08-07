@@ -37,7 +37,7 @@ the entire contribution is *an honest, standardised evaluation framework*.
 | NFR-2 | Protocol symmetry across model families | `warn_on_swallowed_fits` per-model (`cv.py:172`); per-origin in PI loops (`05_Model.py:407,411`); `assert_balanced_test_sets` on CV details (`05_Model.py:665`) **and** PI details (`05_Model.py:501`); ML tuning asymmetry still disclosed | **enforced** |
 | NFR-3 | Small-sample honesty in inference | HLN DM correction, HAC autocovariances, Student-t T−1 df | enforced |
 | NFR-4 | Bit-level reproducibility given fixed inputs + seed | single `config.SEED`, `random_state=42`, per-origin model cache | enforced |
-| NFR-5 | No execution-order dependence | stages read fresh CSVs; mild smell: `02_EDA.py:155` mutates a local `decade` column | partial |
+| NFR-5 | No execution-order dependence | stages read fresh CSVs; mild smell: `03_EDA.py:155` mutates a local `decade` column | partial |
 | NFR-6 | Traceability: every published number maps to an output CSV + code | `verify()` + `data/expected/manifest.md` | enforced |
 | NFR-7 | Single source of truth for shared logic | `src/` imported by all stages; no copy-paste | enforced |
 | NFR-8 | Configuration centralised | `config.py` (paths, seeds, horizons, grids) | enforced |

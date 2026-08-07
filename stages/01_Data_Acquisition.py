@@ -2,7 +2,7 @@
 # jupyter:
 #   jupytext:
 #     cell_metadata_filter: -all
-#     formats: py:percent,../notebooks//ipynb
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
@@ -21,8 +21,8 @@
 # | Stage | Reads from | Writes to |
 # |---|---|---|
 # | 01 Data Acquisition | public data sources (internet) | `data/raw/` + manifest |
-# | 02 EDA | `data/processed/uk_wheat_modelling_table_1980_2024.csv` | figures |
-# | 03 Modelling Table | `data/raw/` + canonical building blocks | modelling table |
+# | 02 Modelling Table | `data/raw/` + canonical building blocks | modelling table |
+# | 03 EDA | `data/processed/uk_wheat_modelling_table_1980_2024.csv` | figures |
 # | 04 Feature Engineering | modelling table | model-ready inputs |
 # | 05 Model | modelling table | result CSVs + figures |
 #
@@ -49,6 +49,10 @@
 # ## 1.1 Setup
 
 # %%
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd().parent if Path.cwd().name == 'notebooks' else Path.cwd()))
+
 import hashlib
 import logging
 from datetime import datetime, timezone
@@ -59,21 +63,13 @@ import pandas as pd
 import requests
 
 from src._bootstrap import init_script
-from src.logging_utils import (
-    get_stage_logger,
-    log_stage_start,
-    log_stage_end,
-    log_artifact,
-    timed_block,
-)
 
 display = init_script(width=140, max_columns=40)
 
-log = get_stage_logger(__name__, "01")
-log_stage_start(
-    log, "01", "Data Acquisition - download Met Office series, parse, aggregate"
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
 )
-
+log = logging.getLogger(__name__)
 import config
 
 
@@ -337,21 +333,14 @@ def main():
 
     downloads = {}
     for var_name, info in config.MET_OFFICE_SOURCES.items():
-        with timed_block(log, f"download_{var_name}", variable=var_name):
-            downloads[var_name] = download_met_series(var_name, info)
+        downloads[var_name] = download_met_series(var_name, info)
 
-    with timed_block(log, "build_manifest", n_vars=len(downloads)):
-        build_manifest(downloads)
+    build_manifest(downloads)
+    aggregate_seasonal_weather(downloads)
 
-    with timed_block(log, "aggregate_seasonal", ref_year=None):
-        aggregate_seasonal_weather(downloads)
-
-    log_stage_end(log, "01", success=True)
-    log.info("Raw data now on disk", extra={"stage": "01"})
+    print("\nRaw data now on disk:")
     for path in sorted(config.RAW_DIR.iterdir()):
-        log_artifact(log, path, "raw file")
-    for path in sorted(config.PROCESSED_DIR.iterdir()):
-        log_artifact(log, path, "processed file")
+        print(f"  {path.name:45s} {path.stat().st_size:>10,} bytes")
 
 
 # %%

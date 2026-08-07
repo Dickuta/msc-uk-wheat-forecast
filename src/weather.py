@@ -1,7 +1,7 @@
 """Aggregation of monthly weather to seasonal phenological windows.
 
 Single source of truth for the seasonal alignment used by stage 01 (which
-builds the UK-mean weather) and stage 03 (which rebuilds it for comparison
+builds the UK-mean weather) and stage 02 (which rebuilds it for comparison
 with the canonical weather). Keeping the logic in one place prevents the
 alignment from drifting between the two consumers.
 """

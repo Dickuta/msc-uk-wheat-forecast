@@ -2,7 +2,7 @@
 # jupyter:
 #   jupytext:
 #     cell_metadata_filter: -all
-#     formats: py:percent,../notebooks//ipynb
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
@@ -11,14 +11,14 @@
 # ---
 
 # %% [markdown]
-# # 02 · Exploratory Data Analysis (EDA)
+# # 03 · Exploratory Data Analysis (EDA)
 #
 # **Goal.** Understand the modelling table before any forecasting model is
 # built: distributions, trends, missingness, correlations and the policy
 # events that shaped UK wheat yields.
 #
 # **Input.** `data/processed/uk_wheat_modelling_table_1980_2024.csv`
-# (produced by stage 03).
+# (produced by stage 02).
 #
 # **Output.** Charts shown inline below (no image files are saved).
 #
@@ -26,25 +26,20 @@
 # pre-rendered, so rerunning this notebook regenerates everything.
 
 # %% [markdown]
-# ## 2.1 Setup & data load
+# ## 3.1 Setup & data load
 
 # %%
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd().parent if Path.cwd().name == 'notebooks' else Path.cwd()))
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 from src._bootstrap import init_script, common_imports
-from src.logging_utils import (
-    get_stage_logger,
-    log_stage_start,
-    log_stage_end,
-    timed_block,
-)
 
 c = common_imports()
 display = init_script()
-
-log = get_stage_logger(__name__, "02")
-log_stage_start(log, "02", "Exploratory Data Analysis")
 
 from src import plotting  # noqa: F401  (inline in notebooks, Agg when headless)
 
@@ -53,22 +48,16 @@ def load_data():
     """Load the modelling table and print a summary."""
     from src._bootstrap import load_modelling_table
 
-    with timed_block(log, "load_modelling_table"):
-        data = load_modelling_table()
-    log.info(
-        "Modelling table loaded",
-        extra={
-            "stage": "02",
-            "rows": data.shape[0],
-            "cols": data.shape[1],
-            "year_range": f"{data['year'].min()}-{data['year'].max()}",
-        },
+    data = load_modelling_table()
+    print(
+        f"Modelling table: {data.shape[0]} rows x {data.shape[1]} cols "
+        f"({data['year'].min()}-{data['year'].max()})"
     )
     return data
 
 
 # %% [markdown]
-# ## 2.2 Data quality
+# ## 3.2 Data quality
 #
 # No missing values and no duplicate years is the first thing to confirm.
 
@@ -91,7 +80,7 @@ def check_data_quality(data):
 
 
 # %% [markdown]
-# ## 2.3 Target distribution — UK wheat yield (t/ha)
+# ## 3.3 Target distribution — UK wheat yield (t/ha)
 
 
 # %%
@@ -126,7 +115,7 @@ def yield_summary(data):
 
 
 # %% [markdown]
-# ## 2.4 The yield time series (1980–2024)
+# ## 3.4 The yield time series (1980–2024)
 #
 # A clear upward trend dominates, with notable dips. We annotate the events
 # that the modelling table encodes as dummy variables.
@@ -194,7 +183,7 @@ def decade_stats(data):
 
 
 # %% [markdown]
-# ## 2.5 Weather covariates over time
+# ## 3.5 Weather covariates over time
 #
 # Temperature and rainfall across the four phenological windows
 # (autumn, winter, spring, grain fill).
@@ -238,7 +227,7 @@ def plot_weather_covariates(data):
 
 
 # %% [markdown]
-# ## 2.6 Correlations with yield
+# ## 3.6 Correlations with yield
 #
 # Which covariates move with yield? A full correlation heatmap, followed by a
 # ranked bar of each covariate's correlation with the target.
@@ -318,8 +307,6 @@ def main():
     print()
     plot_weather_covariates(data)
     display(plot_correlations(data))
-
-    log_stage_end(log, "02", success=True)
 
 
 # %%

@@ -40,14 +40,14 @@ uk_wheat_pipeline/
 │   └── plotting.py           # chart style, headless Agg fallback
 ├── stages/                   # 5 runnable entry points (each has main())
 │   ├── 01_Data_Acquisition.py
-│   ├── 02_EDA.py
-│   ├── 03_Modelling_Table.py
+│   ├── 02_Modelling_Table.py
+│   ├── 03_EDA.py
 │   ├── 04_Feature_Engineering.py
 │   └── 05_Model.py
 ├── notebooks/                # jupytext-paired .ipynb (executed, figures inline)
 │   ├── 01_Data_Acquisition.ipynb
-│   ├── 02_EDA.ipynb
-│   ├── 03_Modelling_Table.ipynb
+│   ├── 02_Modelling_Table.ipynb
+│   ├── 03_EDA.ipynb
 │   ├── 04_Feature_Engineering.ipynb
 │   └── 05_Model.ipynb
 ├── tests/                    # 43 fast unit tests (pytest)
@@ -86,7 +86,7 @@ flowchart TD
     end
 
     subgraph MODEL_TABLE[Canonical Modelling Table]
-        UKMEAN --> MT[stages/03_Modelling_Table.py]
+        UKMEAN --> MT[stages/02_Modelling_Table.py]
         YIELD[DEFRA yield 1980-2024] --> MT
         POLICY[Policy dummies 1992/2005/2022] --> MT
         MT -->|single CSV, no missing| MODEL_CSV[(data/processed/uk_wheat_modelling_table_1980_2024.csv)]
@@ -175,15 +175,15 @@ flowchart TD
     end
 
     %% ============ STAGE 02 ============
-    subgraph S02[🔵 Stage 02: EDA]
-        EDA[02_EDA.py\nFigures only, no outputs]
-    end
-
-    %% ============ STAGE 03 ============
-    subgraph S03[🟡 Stage 03: Modelling Table]
+    subgraph S02[🟡 Stage 02: Modelling Table]
         MERGE[Merge yield + UK-mean weather +\npolicy dummies → single CSV]
         VALIDATE[Assert: 45 rows, no NaN,\nno duplicate years]
         MODEL_TABLE_OUT[(uk_wheat_modelling_table_1980_2024.csv)]
+    end
+
+    %% ============ STAGE 03 ============
+    subgraph S03[🔵 Stage 03: EDA]
+        EDA[03_EDA.py\nFigures only, no outputs]
     end
 
     %% ============ STAGE 04 ============
@@ -343,8 +343,8 @@ flowchart TD
     
     class MET_OFFICE,DEFRA_YIELD,POLICY_DUMMIES,CONFIG input
     class DL,PARSE,MANIFEST_GEN,AGG,ALIGN_CHECK,UKMEAN_OUT stage01
-    class EDA stage02
-    class MERGE,VALIDATE,MODEL_TABLE_OUT stage03
+    class MERGE,VALIDATE,MODEL_TABLE_OUT stage02
+    class EDA stage03
     class FEATURES,FEAT_OUT stage04
     class CV_ENGINE,ORIGIN_LOOP,HORIZON_LOOP,TRAIN_MASK,TEST_YEAR,FACTORY,STAT_MODELS,ML_MODELS,ARIMAX_STEP,SELECT_PVAL,MODEL_CACHE,PREDICT,DETAILS_ACC,SKIPPED,WARN_SWALLOW,SUMMARY,DM_TESTS,DM_CSV,PI_ARIMA,PI_PROPHET,PI_CSV,ORACLE_RUN,ORACLE_CSV,OUT_COMP,OUT_DET,OUT_BASE stage05
     class GUARD_LEAK,GUARD_HORIZON,SELECT_PVAL,BAL_CHECK guard
@@ -390,7 +390,7 @@ flowchart TD
 └────────────────────────────────────────────┬────────────────────────────────────┘
                                              ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           STAGE 03: MODELLING TABLE                              │
+│                           STAGE 02: MODELLING TABLE                              │
 │  ┌──────────────────────────────────────────────────────────────────────────┐   │
 │  │ MERGE (inner join on year)                                               │   │
 │  │   • yield_t_ha (from DEFRA)                                              │   │
@@ -407,7 +407,7 @@ flowchart TD
               ┌──────────────────────────────┼──────────────────────────────┐
               ▼                              ▼                              ▼
 ┌─────────────────────────┐  ┌─────────────────────────┐  ┌─────────────────────────┐
-│     STAGE 02: EDA       │  │  STAGE 04: FEATURES     │  │    STAGE 05: MODELS     │
+│     STAGE 03: EDA       │  │  STAGE 04: FEATURES     │  │    STAGE 05: MODELS     │
 │  (read-only, figures)   │  │  (demo transforms)      │  │  (full CV + verify)     │
 └─────────────────────────┘  └─────────────────────────┘  └───────────┬─────────────┘
                                                                       ▼
@@ -513,24 +513,24 @@ GUARDS at EACH FOLD:
 
 ---
 
-### Stage 02 — EDA (`stages/02_EDA.py`)
-
-| **What** | **Why** | **Where** | **When** |
-|----------|---------|-----------|----------|
-| Load modelling table, plot yield trend, weather correlations, missingness | Exploratory only; no outputs consumed downstream | Inline figures (notebook) | Optional, human inspection |
-
-**No guards** — purely visual.
-
----
-
-### Stage 03 — Modelling Table (`stages/03_Modelling_Table.py`)
+### Stage 02 — Modelling Table (`stages/02_Modelling_Table.py`)
 
 | **What** | **Why** | **Where** | **When** |
 |----------|---------|-----------|----------|
 | Merge canonical yield + UK-mean weather + policy dummies | Sole downstream input (FR-2) | `data/processed/uk_wheat_modelling_table_1980_2024.csv` | Every run |
 | Validate: no missing, no duplicate years, 45 rows | Fail fast on data integrity | Inline asserts | Every run |
 
-**Key principle**: This CSV is the **single contract** between data prep and modelling. Every stage 04/05 reads *only* this file.
+**Key principle**: This CSV is the **single contract** between data prep and modelling. Every stage 03/04/05 reads *only* this file.
+
+---
+
+### Stage 03 — EDA (`stages/03_EDA.py`)
+
+| **What** | **Why** | **Where** | **When** |
+|----------|---------|-----------|----------|
+| Load modelling table, plot yield trend, weather correlations, missingness | Exploratory only; no outputs consumed downstream | Inline figures (notebook) | Optional, human inspection |
+
+**No guards** — purely visual.
 
 ---
 

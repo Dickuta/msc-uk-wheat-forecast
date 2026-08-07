@@ -2,7 +2,7 @@
 # jupyter:
 #   jupytext:
 #     cell_metadata_filter: -all
-#     formats: py:percent,../notebooks//ipynb
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
@@ -43,24 +43,17 @@
 # ## 4.1 Setup
 
 # %%
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd().parent if Path.cwd().name == 'notebooks' else Path.cwd()))
+
 import matplotlib.pyplot as plt
 import warnings
 
 from src._bootstrap import init_script, common_imports
-from src.logging_utils import (
-    get_stage_logger,
-    log_stage_start,
-    log_stage_end,
-    timed_block,
-)
 
 c = common_imports()
 display = init_script()
-
-log = get_stage_logger(__name__, "04")
-log_stage_start(
-    log, "04", "Feature Engineering - demo exogenous forecasts and ARIMAX selection"
-)
 
 from src import plotting  # noqa: F401  (inline in notebooks, Agg when headless)
 from src.features import forecast_exogenous
@@ -214,14 +207,9 @@ def demo_stepwise(data, covariate_cols):
 def main():
     """Run the full stage 04: feature summaries, forecasts, and ARIMAX demo."""
     data, covariate_cols = load_data()
-    with timed_block(log, "demo_exogenous_forecast"):
-        demo_exogenous_forecast(data)
-    with timed_block(log, "forecast_all"):
-        forecast_all(data, covariate_cols)
-    with timed_block(log, "demo_stepwise"):
-        demo_stepwise(data, covariate_cols)
-
-    log_stage_end(log, "04", success=True)
+    demo_exogenous_forecast(data)
+    forecast_all(data, covariate_cols)
+    demo_stepwise(data, covariate_cols)
 
 
 # %%

@@ -2,7 +2,7 @@
 # jupyter:
 #   jupytext:
 #     cell_metadata_filter: -all
-#     formats: py:percent,../notebooks//ipynb
+#     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
@@ -47,6 +47,10 @@
 # ## 5.1 Setup
 
 # %%
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd().parent if Path.cwd().name == 'notebooks' else Path.cwd()))
+
 import logging
 import time
 import warnings
@@ -54,29 +58,25 @@ import warnings
 import matplotlib.pyplot as plt
 
 from src._bootstrap import init_script, common_imports
-from src.logging_utils import (
-    get_stage_logger,
-    log_stage_start,
-    log_stage_end,
-    timed_block,
-    log_artifact,
-)
 
 c = common_imports()
 display = init_script()
-
-log = get_stage_logger(__name__, "05")
-log_stage_start(
-    log, "05", "Model Comparison & Verification - CV, DM tests, PIs, oracle, verify"
-)
 
 from src import plotting  # noqa: F401  (inline in notebooks, Agg when headless)
 from src.cv import ExpandingWindowCV, evaluate_baseline
 from src.metrics import rmse, mae, diebold_mariano
 from src.guards import assert_balanced_test_sets, warn_on_swallowed_fits
 from src.models import (
+    persistence_factory,
+    arima_factory,
+    sarima_factory,
+    arimax_factory,
+    prophet_factory,
     tune_rf,
     tune_xgb,
+    make_rf_factory,
+    make_xgb_factory,
+    make_hybrid_factory,
 )
 
 warnings.filterwarnings("ignore")
@@ -98,13 +98,28 @@ for _name in (
     logging.getLogger(_name).disabled = True
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-# Model config now driven from config.py (single source of truth)
-MODEL_ORDER = c.config.MODEL_ORDER
-_BAR_COLOURS = c.config.BAR_COLOURS
-STATISTICAL_MODELS = c.config.STATISTICAL_MODELS
-ML_MODELS = c.config.ML_MODELS
-MODEL_FACTORIES = c.config.MODEL_FACTORIES
-EXOG_MODELS = c.config.EXOG_MODELS
+
+MODEL_ORDER = [
+    "Persistence",
+    "ARIMA",
+    "SARIMA",
+    "ARIMAX",
+    "Prophet",
+    "RandomForest",
+    "XGBoost",
+    "ARIMA+XGBoost",
+]
+
+_BAR_COLOURS = [
+    "#7f7f7f",
+    "#1f77b4",
+    "#2ca02c",
+    "#9467bd",
+    "#ff7f0e",
+    "#8c564b",
+    "#e377c2",
+    "#d62728",
+]
 
 
 # %% [markdown]
@@ -199,8 +214,13 @@ def run_baselines(data):
 # %%
 def run_statistical_models(data, all_summaries, all_details):
     """Run the five statistical model families under expanding-window CV."""
-    for name in c.config.STATISTICAL_MODELS:
-        factory = c.config.MODEL_FACTORIES[name]
+    for name, factory in [
+        ("Persistence", persistence_factory),
+        ("ARIMA", arima_factory),
+        ("SARIMA", sarima_factory),
+        ("ARIMAX", arimax_factory),
+        ("Prophet", prophet_factory),
+    ]:
         s, d = run_cv(data, name, factory)
         all_summaries.append(s)
         all_details.append(d)
@@ -232,10 +252,11 @@ def run_ml_models(data, all_summaries, all_details):
     xgb_params = tune_xgb(X_full, y_full, tscv)
     print(f"  XGB params: {xgb_params}")
 
-    for name in c.config.ML_MODELS:
-        factory = c.config.MODEL_FACTORIES[name](
-            rf_params if name in ("RandomForest", "ARIMA+XGBoost") else xgb_params
-        )
+    for name, factory in [
+        ("RandomForest", make_rf_factory(rf_params)),
+        ("XGBoost", make_xgb_factory(xgb_params)),
+        ("ARIMA+XGBoost", make_hybrid_factory(xgb_params)),
+    ]:
         s, d = run_cv(data, name, factory)
         all_summaries.append(s)
         all_details.append(d)
@@ -575,18 +596,16 @@ def run_oracle(data, rf_params, xgb_params):
 
     oracle_fc = oracle_forecast_factory(data)
     oracle_summaries = []
-
-    # Only models that use exogenous covariates
-    exog_models = [m for m in c.config.MODEL_ORDER if m in c.config.EXOG_MODELS]
-
-    for name in exog_models:
-        factory_base = c.config.MODEL_FACTORIES[name]
-        if name in ("RandomForest", "ARIMA+XGBoost"):
-            factory = partial(factory_base(rf_params), oracle_fc=oracle_fc)
-        elif name == "XGBoost":
-            factory = partial(factory_base(xgb_params), oracle_fc=oracle_fc)
-        else:
-            factory = partial(factory_base, oracle_fc=oracle_fc)
+    for name, factory in [
+        ("ARIMAX", partial(arimax_factory, oracle_fc=oracle_fc)),
+        ("Prophet", partial(prophet_factory, oracle_fc=oracle_fc)),
+        ("RandomForest", partial(make_rf_factory(rf_params), oracle_fc=oracle_fc)),
+        ("XGBoost", partial(make_xgb_factory(xgb_params), oracle_fc=oracle_fc)),
+        (
+            "ARIMA+XGBoost",
+            partial(make_hybrid_factory(xgb_params), oracle_fc=oracle_fc),
+        ),
+    ]:
         summary, _ = run_cv(data, name, factory)
         oracle_summaries.append(summary)
 
@@ -609,7 +628,7 @@ def run_oracle(data, rf_params, xgb_params):
     # ARIMA needs no exog → it gets no oracle run, so its oracle_rmse is NaN after
     # the merge. Add context rows with oracle_rmse = standard_rmse (zero improvement)
     # for every horizon so the oracle table is complete for all 8 models × 4 horizons.
-    for h in c.config.HORIZONS:
+    for h in [1, 2, 3, 4]:
         row = standard[(standard["model"] == "ARIMA") & (standard["horizon"] == h)]
         if len(row) > 0:
             r = row.iloc[0]
@@ -724,9 +743,7 @@ def verify_outputs(details):
         1e-3,
     )
 
-    mc = c.pd.read_csv(
-        c.config.EXPECTED_DIR / "pi_coverage_results_corrected.csv"
-    ).merge(
+    mc = c.pd.read_csv(c.config.EXPECTED_DIR / "pi_coverage_results_corrected.csv").merge(
         c.pd.read_csv(c.config.OUTPUT_DIR / "pi_coverage_results_corrected.csv"),
         on=["model", "horizon"],
         suffixes=("_exp", "_got"),
@@ -766,7 +783,7 @@ def generate_decision_guide():
     lines = ["# UK wheat yield forecasting — practitioner decision guide"]
     lines.append("")
     lines.append(
-        "Generated from the verified outputs of `stages/05_Model.py` "
+        "Generated from the verified outputs of `scripts/05_Model.py` "
         "(see `data/expected/` for the verification gate)."
     )
     lines.append("")
@@ -865,58 +882,36 @@ def main():
     """Run the full stage 05: model comparison, inference, PIs, oracle, verify."""
     from src._bootstrap import load_modelling_table
 
-    with timed_block(log, "load_modelling_table"):
-        data = load_modelling_table()
-    log.info(
-        "Modelling table loaded",
-        extra={
-            "stage": "05",
-            "rows": data.shape[0],
-            "year_range": f"{data['year'].min()}-{data['year'].max()}",
-        },
+    data = load_modelling_table()
+    print(
+        f"Loaded modelling table: {data.shape[0]} rows "
+        f"({data['year'].min()}-{data['year'].max()})"
     )
 
-    with timed_block(log, "run_baselines"):
-        run_baselines(data)
+    run_baselines(data)
 
     all_summaries, all_details = [], []
-
-    with timed_block(log, "run_statistical_models"):
-        run_statistical_models(data, all_summaries, all_details)
-
-    with timed_block(log, "run_ml_models"):
-        all_summaries, all_details, rf_params, xgb_params = run_ml_models(
-            data, all_summaries, all_details
-        )
+    run_statistical_models(data, all_summaries, all_details)
+    all_summaries, all_details, rf_params, xgb_params = run_ml_models(
+        data, all_summaries, all_details
+    )
 
     comparison = c.pd.concat(all_summaries, ignore_index=True)
     details = c.pd.concat(all_details, ignore_index=True)
+    aggregate_and_plot(comparison, details)
 
-    with timed_block(log, "aggregate_and_plot"):
-        aggregate_and_plot(comparison, details)
+    dm_df = run_dm_tests(details)
+    plot_dm_heatmap(dm_df)
 
-    with timed_block(log, "run_dm_tests"):
-        dm_df = run_dm_tests(details)
+    compute_prediction_intervals(data)
 
-    with timed_block(log, "plot_dm_heatmap"):
-        plot_dm_heatmap(dm_df)
+    run_oracle(data, rf_params, xgb_params)
 
-    with timed_block(log, "compute_prediction_intervals"):
-        compute_prediction_intervals(data)
+    all_ok = verify_outputs(details)
 
-    with timed_block(log, "run_oracle"):
-        run_oracle(data, rf_params, xgb_params)
+    generate_decision_guide()
 
-    with timed_block(log, "verify_outputs"):
-        all_ok = verify_outputs(details)
-
-    with timed_block(log, "generate_decision_guide"):
-        generate_decision_guide()
-
-    with timed_block(log, "print_output_summary"):
-        print_output_summary()
-
-    log_stage_end(log, "05", success=all_ok)
+    print_output_summary()
 
     if not all_ok:
         c.sys.exit(1)

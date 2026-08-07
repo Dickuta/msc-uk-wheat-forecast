@@ -22,14 +22,14 @@ uk_wheat_pipeline/
 │   └── plotting.py           # chart style (all charts render inline)
 ├── stages/                  # the five stages as runnable .py files
 │   ├── 01_Data_Acquisition.py       # acquire raw data from public sources
-│   ├── 02_EDA.py                    # exploratory data analysis
-│   ├── 03_Modelling_Table.py        # assemble the modelling table
+│   ├── 02_Modelling_Table.py        # assemble the modelling table
+│   ├── 03_EDA.py                    # exploratory data analysis
 │   ├── 04_Feature_Engineering.py    # model-ready features
 │   └── 05_Model.py                  # comparison, DM, PIs, oracle, verify
 ├── notebooks/                # the same five stages as executed .ipynb
 │   ├── 01_Data_Acquisition.ipynb
-│   ├── 02_EDA.ipynb
-│   ├── 03_Modelling_Table.ipynb
+│   ├── 02_Modelling_Table.ipynb
+│   ├── 03_EDA.ipynb
 │   ├── 04_Feature_Engineering.ipynb
 │   └── 05_Model.ipynb
 ├── tests/                    # fast unit tests (pytest)
@@ -48,8 +48,8 @@ resolve the pipeline root themselves, so they work from any directory:
 
 ```bash
 python stages/01_Data_Acquisition.py   # or open notebooks/01_Data_Acquisition.ipynb
-python stages/02_EDA.py
-python stages/03_Modelling_Table.py
+python stages/02_Modelling_Table.py
+python stages/03_EDA.py
 python stages/04_Feature_Engineering.py
 python stages/05_Model.py              # heavy: ~30–70 min on CPU
 ```
@@ -80,8 +80,8 @@ python -m pytest tests/ -q
 | Stage | Reads from | Writes to |
 |---|---|---|
 | 01 | public sources (Met Office UK Climate Series) | `data/raw/` + `manifest.csv` |
-| 02 | modelling table | inline charts only |
-| 03 | `data/raw/` + canonical building blocks | the modelling table |
+| 02 | `data/raw/` + canonical building blocks | the modelling table |
+| 03 | modelling table | inline charts only |
 | 04 | modelling table | nothing (demonstrates feature construction) |
 | 05 | modelling table | result CSVs (charts inline) |
 
@@ -92,7 +92,7 @@ python -m pytest tests/ -q
   indicators.
 * **Canonical vs UK-mean weather** — the thesis numbers use a warmer regional
   (England-focused) weather extraction that cannot be rebuilt from the public
-  UK-mean series. Stage 03 keeps the canonical table as ground truth and
+  UK-mean series. Stage 02 keeps the canonical table as ground truth and
   *quantifies* the difference so the provenance is fully transparent.
 
 ## Reproducing the thesis numbers
@@ -115,7 +115,7 @@ reproduced.
   on pre-2001 data only is the fix.
 * **Canonical vs UK-mean weather.** The thesis numbers use a warmer
   England-focused weather extraction that cannot be rebuilt from the public
-  UK-mean series. Stage 03 keeps the canonical table as ground truth and
+  UK-mean series. Stage 02 keeps the canonical table as ground truth and
   *quantifies* the difference so the provenance stays transparent.
 * **`data/expected/` was regenerated from the corrected pipeline.** On
   2026-08-06 the verification target was rebuilt from `stages/05_Model.py`
