@@ -115,3 +115,10 @@ reproduced.
   `changes_vs_thesis.csv` documenting every difference. `ALL CHECKS PASSED`
   therefore certifies that the corrected pipeline reproduces its own verified
   results; it does not re-certify the thesis numbers themselves.
+* **Additive verification schema (2026-08-08).** The 2026-08-08 checkpoint adds
+  **DM tests on both MSE and MAE loss** with a per-horizon **Bonferroni**
+  flag, **prediction-interval coverage for SARIMA and ARIMAX** (plus
+  `interval_score`), and **ADF diagnostics** in stage 03. These are pure
+  additions — no RMSE/MAE point moves — so the verify gate was regenerated from
+  a single clean stage-05 run (a stray Jupyter kernel that was racing the run was
+  killed first).

@@ -90,6 +90,7 @@ class ExpandingWindowCV:
         )
         self.results: list[dict[str, Any]] = []
         self.skipped_folds: list[dict[str, Any]] = []
+        self.fitted_predictors: dict[int, Predictor] = {}
 
     def _get_train_test(
         self, train_end_year: int, horizon: int
@@ -189,6 +190,7 @@ class ExpandingWindowCV:
                 )
             if predictions:
                 self.results.extend(predictions)
+        self.fitted_predictors = dict(model_cache)
         warn_on_swallowed_fits(attempted, attempted - skipped, self.model_name)
         return self.summarise()
 

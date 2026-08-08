@@ -31,9 +31,11 @@ duplicating any model code.
 
 ``predict_interval(h)``
 -----------------------
-The ARIMA and Prophet factories also expose ``predict_interval(h)`` returning
-``(yhat, lower, upper)`` at ``interval_width`` coverage. Stage 05 uses this for
-the prediction-interval coverage experiment (Tables 4.5 / Figure 4.3).
+The ARIMA, SARIMA, ARIMAX and Prophet factories expose ``predict_interval(h)``
+returning ``(yhat, lower, upper)`` at 95% coverage. Stage 05 uses this for
+the prediction-interval coverage experiment (Tables 4.5 / Figure 4.3). The
+hybrid intentionally does not: its two-stage fit invalidates the ARIMA
+interval's analytical coverage.
 
 SARIMA fallback note
 --------------------
@@ -50,6 +52,33 @@ import pandas as pd
 
 from .features import forecast_exogenous
 from .guards import select_exog_pvalues
+
+
+# --------------------------------------------------------------------------- #
+# Fit cache
+# --------------------------------------------------------------------------- #
+# A result-neutral speedup: the expanding-window CV fits each model once per
+# training origin, and the oracle experiment re-fits the *same* model on the
+# *same* data per origin. Every factory here is deterministic given its
+# training data (Prophet, too, once ``np.random.seed(42)`` is reset per
+# ``run_cv``), so the oracle run can reuse the main-CV fit instead of refitting.
+_FIT_CACHE: dict = {}
+
+
+def reset_fit_cache() -> None:
+    """Clear the cross-phase fit cache (call at the start of every stage-05 run."""
+    _FIT_CACHE.clear()
+
+
+def _cached(key, fit_fn, use_cache):
+    """Return ``fit_fn()`` cached under ``key`` when ``use_cache`` is True."""
+    if not use_cache:
+        return fit_fn()
+    value = _FIT_CACHE.get(key)
+    if value is None:
+        value = fit_fn()
+        _FIT_CACHE[key] = value
+    return value
 
 
 def _fit_arima(model, **kwargs):
@@ -142,9 +171,14 @@ def persistence_factory(train_df, horizon):
     return PersistencePredictor()
 
 
-def arima_factory(train_df, horizon):
+def arima_factory(train_df, horizon, oracle_fc=None, use_cache=True):
     y = train_df["yield_t_ha"].values
-    fitted = fit_best_arima(y, range(0, 4), range(0, 1), range(0, 4))
+    key = ("ARIMA", int(train_df["year"].max()))
+    fitted = _cached(
+        key,
+        lambda: fit_best_arima(y, range(0, 4), range(0, 1), range(0, 4)),
+        use_cache,
+    )
 
     class ARIMAPredictor:
         def __init__(self, fitted):
@@ -163,24 +197,30 @@ def arima_factory(train_df, horizon):
     return ARIMAPredictor(fitted)
 
 
-def sarima_factory(train_df, horizon):
+def sarima_factory(train_df, horizon, oracle_fc=None, use_cache=True):
     from statsmodels.tsa.arima.model import ARIMA
 
     y = train_df["yield_t_ha"].values
-    best_aic = np.inf
-    best_model = None
-    for p in range(0, 3):
-        for q in range(0, 3):
-            try:
-                model = ARIMA(y, order=(p, 0, q), seasonal_order=(p, 0, q, 1))
-                fitted = _fit_arima(model)
-                if fitted.aicc < best_aic:
-                    best_aic = fitted.aicc
-                    best_model = fitted
-            except Exception:
-                continue
-    if best_model is None:
-        best_model = _fit_arima(ARIMA(y, order=(1, 0, 0)))
+    key = ("SARIMA", int(train_df["year"].max()))
+
+    def _fit():
+        best_aic = np.inf
+        best_model = None
+        for p in range(0, 3):
+            for q in range(0, 3):
+                try:
+                    model = ARIMA(y, order=(p, 0, q), seasonal_order=(p, 0, q, 1))
+                    fitted = _fit_arima(model)
+                    if fitted.aicc < best_aic:
+                        best_aic = fitted.aicc
+                        best_model = fitted
+                except Exception:
+                    continue
+        if best_model is None:
+            best_model = _fit_arima(ARIMA(y, order=(1, 0, 0)))
+        return best_model
+
+    best_model = _cached(key, _fit, use_cache)
 
     class SARIMAPredictor:
         def __init__(self, fitted):
@@ -190,24 +230,36 @@ def sarima_factory(train_df, horizon):
             pred = self.fitted.forecast(steps=h)
             return float(pred.iloc[-1]) if hasattr(pred, "iloc") else float(pred[-1])
 
+        def predict_interval(self, h):
+            fc = self.fitted.get_forecast(steps=h)
+            ci = np.asarray(fc.conf_int(alpha=0.05))
+            yhat = float(np.asarray(fc.predicted_mean)[-1])
+            return yhat, float(ci[-1, 0]), float(ci[-1, 1])
+
     return SARIMAPredictor(best_model)
 
 
-def arimax_factory(train_df, horizon, oracle_fc=None):
+def arimax_factory(train_df, horizon, oracle_fc=None, use_cache=True):
     from statsmodels.tsa.arima.model import ARIMA
 
     cov_cols = [c for c in train_df.columns if c not in ("year", "yield_t_ha")]
-    selected, _ = arimax_stepwise_selection(train_df, cov_cols)
+    key = ("ARIMAX", int(train_df["year"].max()))
+
+    def _fit():
+        selected, _ = arimax_stepwise_selection(train_df, cov_cols)
+        y = train_df["yield_t_ha"].values
+        X = train_df[selected].values if selected else None
+        return selected, _fit_arima(ARIMA(y, exog=X, order=(1, 0, 0)))
+
+    selected, model = _cached(key, _fit, use_cache)
+    fitted = model
 
     class ARIMAXPredictor:
-        def __init__(self, train_df, selected, order=(1, 0, 0), oracle_fc=None):
+        def __init__(self, train_df, selected, oracle_fc=None):
             self.train_df = train_df
             self.selected = selected
-            self.order = order
             self.oracle_fc = oracle_fc
-            y = train_df["yield_t_ha"].values
-            X = train_df[selected].values if selected else None
-            self.model = _fit_arima(ARIMA(y, exog=X, order=order))
+            self.model = fitted
 
         def predict(self, h):
             if self.selected:
@@ -218,6 +270,18 @@ def arimax_factory(train_df, horizon, oracle_fc=None):
                 X_future = None
             pred = self.model.forecast(steps=h, exog=X_future)
             return float(pred.iloc[-1]) if hasattr(pred, "iloc") else float(pred[-1])
+
+        def predict_interval(self, h):
+            if self.selected:
+                fc = self.oracle_fc or forecast_exogenous
+                exog_forecasts = fc(self.train_df, self.selected, h)
+                X_future = np.column_stack([exog_forecasts[c] for c in self.selected])
+            else:
+                X_future = None
+            fct = self.model.get_forecast(steps=h, exog=X_future)
+            ci = np.asarray(fct.conf_int(alpha=0.05))
+            yhat = float(np.asarray(fct.predicted_mean)[-1])
+            return yhat, float(ci[-1, 0]), float(ci[-1, 1])
 
     return ARIMAXPredictor(train_df, selected, oracle_fc=oracle_fc)
 
@@ -294,29 +358,39 @@ def _fill_future_covariates(future, train_df, cov_cols, exog_fcst):
                     future.at[i, c] = train_df[c].mean()
 
 
-def prophet_factory(train_df, horizon, oracle_fc=None, interval_width=0.95):
+def prophet_factory(
+    train_df, horizon, oracle_fc=None, interval_width=0.95, use_cache=True
+):
+    from prophet import Prophet
+
     cov_cols = [c for c in train_df.columns if c not in ("year", "yield_t_ha")]
     pdf = _prophet_df(train_df)
-    best_scale = _select_prophet_changepoint_scale(pdf, cov_cols)
+    key = ("Prophet", int(train_df["year"].max()))
+
+    def _fit():
+        best_scale = _select_prophet_changepoint_scale(pdf, cov_cols)
+        model = Prophet(
+            changepoint_prior_scale=best_scale,
+            yearly_seasonality=False,
+            weekly_seasonality=False,
+            daily_seasonality=False,
+            interval_width=interval_width,
+        )
+        for c in cov_cols:
+            model.add_regressor(c)
+        model.fit(pdf[["ds", "y"] + cov_cols])
+        return best_scale, model
+
+    best_scale, model = _cached(key, _fit, use_cache)
 
     class ProphetPredictor:
-        def __init__(self, pdf, cov_cols, scale, oracle_fc=None, interval_width=0.95):
-            from prophet import Prophet
-
+        def __init__(self, model, best_scale, pdf, train_df, cov_cols, oracle_fc=None):
             self.pdf = pdf
             self.train_df = train_df
             self.cov_cols = cov_cols
             self.oracle_fc = oracle_fc
-            self.model = Prophet(
-                changepoint_prior_scale=scale,
-                yearly_seasonality=False,
-                weekly_seasonality=False,
-                daily_seasonality=False,
-                interval_width=interval_width,
-            )
-            for c in cov_cols:
-                self.model.add_regressor(c)
-            self.model.fit(pdf[["ds", "y"] + cov_cols])
+            self.scale = best_scale
+            self.model = model
 
         def _forecast_frame(self, h):
             fc = self.oracle_fc or forecast_exogenous
@@ -336,7 +410,7 @@ def prophet_factory(train_df, horizon, oracle_fc=None, interval_width=0.95):
                 float(last["yhat_upper"]),
             )
 
-    return ProphetPredictor(pdf, cov_cols, best_scale, oracle_fc, interval_width)
+    return ProphetPredictor(model, best_scale, pdf, train_df, cov_cols, oracle_fc)
 
 
 def pd_to_datetime_years(years):
