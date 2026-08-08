@@ -216,6 +216,7 @@ OUTPUT_FILES = {
     "pi_coverage": OUTPUT_DIR / "pi_coverage_results_corrected.csv",
     "pi_details": OUTPUT_DIR / "pi_detailed_results_corrected.csv",
     "oracle": OUTPUT_DIR / "oracle_exogenous_results.csv",
+    "arima_residual_ljungbox": OUTPUT_DIR / "arima_residual_ljungbox.csv",
     "decision_guide": OUTPUT_DIR / "decision_guide.md",
 }
 
