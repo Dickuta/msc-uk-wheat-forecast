@@ -95,6 +95,11 @@ class ExpandingWindowCV:
     def _get_train_test(
         self, train_end_year: int, horizon: int
     ) -> Tuple[Optional[pd.DataFrame], Optional[pd.Series], Optional[int]]:
+        """Return the training frame, the test row and the test year for an origin.
+
+        Returns ``(None, None, None)`` when the horizon extends beyond the end
+        of the data or the test year is absent from the table.
+        """
         train_mask = self.data["year"] <= train_end_year
         test_year = train_end_year + horizon
         if test_year > self.data["year"].max():
@@ -109,6 +114,7 @@ class ExpandingWindowCV:
     def _standardise_train_test(
         self, train_df: pd.DataFrame, test_row: pd.Series
     ) -> Tuple[pd.DataFrame, pd.Series]:
+        """Standardise covariates to zero mean / unit variance using the train fit."""
         from sklearn.preprocessing import StandardScaler
 
         scaler = StandardScaler()

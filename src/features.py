@@ -5,9 +5,9 @@ Feature engineering helpers shared by the model stage.
 
 The only exogenous-feature engineering used in the corrected pipeline is the
 multi-step-ahead forecast of every covariate with a plain ARIMA(1, 0, 0)
-model fitted on the training window. This mirrors what happens operationally:
-to forecast yield for year Y+h the model must first "know" the weather of
-year Y+h, so those values are projected from the covariates' own history.
+model fitted on the training window. This mirrors operational practice: to
+forecast yield for year Y+h the model must first obtain the weather of that
+year, so those values are projected from the covariates' own history.
 """
 
 import warnings

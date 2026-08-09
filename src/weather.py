@@ -3,7 +3,7 @@
 Single source of truth for the seasonal alignment used by stage 01 (which
 builds the UK-mean weather) and stage 02 (which rebuilds it for comparison
 with the canonical weather). Keeping the logic in one place prevents the
-alignment from drifting between the two consumers.
+two consumers from diverging.
 """
 
 import numpy as np

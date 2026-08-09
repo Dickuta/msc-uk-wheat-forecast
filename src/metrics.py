@@ -3,9 +3,10 @@ metrics.py
 
 Forecast accuracy metrics and the Diebold-Mariano (DM) test.
 
-The DM implementation is verbatim from the thesis `validation_pipeline.py`:
-it uses the Harvey-Leybourne-Newbold (HLN) small-sample correction and a
-one-sided... two-sided Student-t approximation for the p-value.
+The DM implementation is taken from the thesis `validation_pipeline.py`
+without modification: it applies the Harvey-Leybourne-Newbold (HLN)
+small-sample correction and a two-sided Student-t approximation for the
+p-value.
 """
 
 from __future__ import annotations

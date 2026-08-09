@@ -1,7 +1,8 @@
 """
 Centralised structured logging for pipeline stages.
 
-Produces JSON lines to stdout (CI-friendly) + optional human-readable output.
+Emits each log record as a single JSON line on stdout, which is well suited
+to CI and log aggregation.
 """
 
 from __future__ import annotations

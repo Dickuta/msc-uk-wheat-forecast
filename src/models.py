@@ -66,7 +66,7 @@ _FIT_CACHE: dict = {}
 
 
 def reset_fit_cache() -> None:
-    """Clear the cross-phase fit cache (call at the start of every stage-05 run."""
+    """Clear the cross-phase fit cache (call at the start of every stage-05 run)."""
     _FIT_CACHE.clear()
 
 
@@ -162,6 +162,7 @@ def arimax_stepwise_selection(train_df, covariate_cols, alpha=0.10, max_cov=5):
 # Statistical models
 # --------------------------------------------------------------------------- #
 def persistence_factory(train_df, horizon):
+    """Return a predictor that repeats the last observed yield for every step."""
     last_yield = float(train_df["yield_t_ha"].iloc[-1])
 
     class PersistencePredictor:
@@ -172,6 +173,7 @@ def persistence_factory(train_df, horizon):
 
 
 def arima_factory(train_df, horizon, oracle_fc=None, use_cache=True):
+    """Return a predictor from an AICc-selected ARIMA model (p, q in 0..3, d = 0)."""
     y = train_df["yield_t_ha"].values
     key = ("ARIMA", int(train_df["year"].max()))
     fitted = _cached(
@@ -198,6 +200,7 @@ def arima_factory(train_df, horizon, oracle_fc=None, use_cache=True):
 
 
 def sarima_factory(train_df, horizon, oracle_fc=None, use_cache=True):
+    """Return a predictor from an AICc-selected seasonal ARIMA model."""
     from statsmodels.tsa.arima.model import ARIMA
 
     y = train_df["yield_t_ha"].values
@@ -240,6 +243,7 @@ def sarima_factory(train_df, horizon, oracle_fc=None, use_cache=True):
 
 
 def arimax_factory(train_df, horizon, oracle_fc=None, use_cache=True):
+    """Return an ARIMAX predictor with stepwise-selected exogenous covariates."""
     from statsmodels.tsa.arima.model import ARIMA
 
     cov_cols = [c for c in train_df.columns if c not in ("year", "yield_t_ha")]
@@ -290,6 +294,7 @@ def arimax_factory(train_df, horizon, oracle_fc=None, use_cache=True):
 # Prophet helpers (shared by the CV factory and the PI experiment)
 # --------------------------------------------------------------------------- #
 def _prophet_df(train_df):
+    """Build the Prophet training frame (ds, y) from a modelling table."""
     pdf = train_df.copy()
     pdf["ds"] = pd_to_datetime_years(pdf["year"])
     pdf.rename(columns={"yield_t_ha": "y"}, inplace=True)
@@ -414,6 +419,7 @@ def prophet_factory(
 
 
 def pd_to_datetime_years(years):
+    """Convert a year (or series of years) to pandas datetime objects."""
     import pandas as pd
 
     return pd.to_datetime(years, format="%Y")
@@ -519,6 +525,7 @@ def tune_xgb(X_full, y_full, tscv):
 
 
 def make_rf_factory(rf_params):
+    """Return a factory that builds a RandomForest predictor using ``rf_params``."""
     from sklearn.ensemble import RandomForestRegressor
 
     class RFPredictor:
@@ -543,6 +550,7 @@ def make_rf_factory(rf_params):
 
 
 def make_xgb_factory(xgb_params):
+    """Return a factory that builds an XGBoost predictor using ``xgb_params``."""
     import xgboost as xgb
 
     class XGBPredictor:
@@ -567,6 +575,11 @@ def make_xgb_factory(xgb_params):
 
 
 def make_hybrid_factory(xgb_params):
+    """Return a factory that builds an ARIMA+XGBoost hybrid predictor.
+
+    The ARIMA component is selected by AICc (d in 0..1); XGBoost then models
+    the ARIMA residuals against the covariate matrix using ``xgb_params``.
+    """
     import xgboost as xgb
 
     class HybridPredictor:

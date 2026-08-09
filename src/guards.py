@@ -1,20 +1,23 @@
 """
 Runtime invariant guards for the UK wheat yield forecasting pipeline.
 
-Each function encodes ONE invariant that, if violated, produces a *silent-and-wrong*
-result — the failure mode that actually threatens this project. The guards exist to
-convert those silent failures into loud, specific ones, at the point of violation.
+Each guard encodes one invariant whose violation would otherwise produce a
+silent, incorrect result - the failure mode that poses the greatest risk to
+this project. The guards convert such silent failures into explicit errors,
+raised at the point of violation.
 
-They are small, pure, and dependency-light (pandas/numpy only where a frame is the
-natural input). Call them liberally; they are cheap relative to a wrong thesis number.
+The guards are small, pure and dependency-light (pandas and numpy are used
+only where a frame or series is the natural input). They should be called
+liberally; their cost is negligible compared with an undetected error in a
+thesis result.
 
 Mapping to the requirements (see REQUIREMENTS.md):
-    assert_training_precedes_origin  -> NFR-1  (leakage-safety)      / F-2
-    assert_horizon_consistent        -> NFR-1                         / F-2
-    select_exog_pvalues              -> NFR-9  (address by name)      / F-1
-    assert_alignment                 -> FR-3   (seasonal keying)      / F-1
-    assert_balanced_test_sets        -> NFR-2  (protocol symmetry)    / F-4
-    warn_on_swallowed_fits           -> NFR-2                         / F-4
+    assert_training_precedes_origin  -> NFR-1  (leakage-safety)     / F-2
+    assert_horizon_consistent        -> NFR-1                        / F-2
+    select_exog_pvalues              -> NFR-9  (address by name)     / F-1
+    assert_alignment                 -> FR-3   (seasonal keying)     / F-1
+    assert_balanced_test_sets        -> NFR-2  (protocol symmetry)   / F-4
+    warn_on_swallowed_fits           -> NFR-2                        / F-4
 """
 
 from __future__ import annotations
@@ -68,8 +71,8 @@ def assert_horizon_consistent(origin_year: int, test_year: int, horizon: int) ->
 def select_exog_pvalues(pvalues, param_names: Sequence[str], selected: Sequence[str]):
     """Return exog p-values selected BY NAME — never by tail position.
 
-    Reproduces the corrected ARIMAX selection logic as a reusable guard. Refuses
-    to guess: if a selected covariate is not among the fitted parameters, it
+    Reproduces the corrected ARIMAX selection logic as a reusable guard. If a
+    selected covariate is not among the fitted parameter names, the function
     raises rather than silently returning an AR term or sigma2.
 
     Returns a pandas Series aligned to `selected` (preserving the .max() interface).
@@ -101,8 +104,9 @@ def assert_alignment(
 ) -> None:
     """Assert one seasonal cell was built from the intended months/year.
 
-    Encodes the hand-computed check that proved the off-by-one fix, e.g. autumn of
-    harvest year Y must equal the mean/sum of Oct+Nov of year Y-1:
+    Encodes the manual check that verified the off-by-one alignment fix. For
+    example, autumn of harvest year Y must equal the mean or sum of Oct+Nov
+    of year Y-1:
 
         assert_alignment(monthly, seasonal.loc[Y, "autumn_tas"], Y,
                          months=[10, 11], year_offset=-1,
@@ -186,9 +190,10 @@ def assert_balanced_test_sets(
 ) -> None:
     """Every model must be scored on the SAME test years within each horizon.
 
-    A model that silently fails on some windows (bare `except: continue`) ends up
-    scored on a smaller, easier subset — an invisible apples-to-oranges. This
-    raises with the specific offending (horizon, model) sets.
+    A model that silently fails on some windows (a bare ``except: continue``)
+    ends up scored on a smaller and easier subset, which makes the comparison
+    invalid. This function raises, listing the offending (horizon, model)
+    pairs.
     """
     problems = []
     for h, grp in details.groupby(horizon_col):
@@ -203,7 +208,7 @@ def assert_balanced_test_sets(
 
 
 def warn_on_swallowed_fits(n_attempted: int, n_succeeded: int, context: str) -> None:
-    """Emit a loud warning when a fit loop silently dropped windows."""
+    """Emit a warning when a fit loop silently dropped windows."""
     if n_succeeded < n_attempted:
         warnings.warn(
             f"[{context}] {n_attempted - n_succeeded} of {n_attempted} fits were "
